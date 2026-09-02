@@ -43,6 +43,8 @@ int main(int argc, char **argv) {
 
   memset(&queue, 0, sizeof(queue));
   pthread_mutex_init(&queue.lock, NULL);
+  /* BUG: g_num_prod_lock was not initiated. it is already being freed later */
+  pthread_mutex_init(&g_num_prod_lock, NULL);
 
   g_num_prod = 2;
 
@@ -56,9 +58,14 @@ int main(int argc, char **argv) {
 
   printf("\nProducer thread started with thread id %lu", producer_thread);
 
-  result = pthread_detach(producer_thread);
-  if (0 != result)
-    fprintf(stderr, "\nFailed to detach producer thread: %s", strerror(result));
+  /*
+   * BUG: producer_thread is being detached here, and then later it is joined.
+   * we cannot do both, so I consider one of these invocation a bug/error.
+   * I am commenting out the detach call here, so we can join later.
+   */
+  // result = pthread_detach(producer_thread);
+  // if (0 != result)
+  //   fprintf(stderr, "\nFailed to detach producer thread: %s", strerror(result));
 
   result = pthread_create(&producer_thread2, NULL, producer_routine, &queue);
   if (0 != result) {
@@ -73,7 +80,6 @@ int main(int argc, char **argv) {
     fprintf(stderr, "\nFailed to create consumer thread: %s", strerror(result));
     exit(1);
   }
-
 
   result = pthread_join(producer_thread, NULL);
   if (0 != result) {
@@ -92,8 +98,13 @@ int main(int argc, char **argv) {
     fprintf(stderr, "Failed to join consumer thread: %s\n", strerror(result));
     pthread_exit(NULL);
   }
-  printf("\nPrinted %lu characters.\n", *(long*)thread_return);
-  free(thread_return);
+
+  /*
+   * BUG: was getting a seg fault here. casted to the correct type , and got rid of free,
+   * since the value is not on the heap.
+   */
+  printf("\nPrinted %lu characters.\n", (unsigned long) thread_return);
+  // free(thread_return);
 
   pthread_mutex_destroy(&queue.lock);
   pthread_mutex_destroy(&g_num_prod_lock);
@@ -149,10 +160,13 @@ void *producer_routine(void *arg) {
   }
 
   /* Decrement the number of producer threads running, then return */
+  /* BUG: needs to update within bounds of a mutex */
+  pthread_mutex_lock(&g_num_prod_lock);
   --g_num_prod;
+  pthread_mutex_unlock(&g_num_prod_lock);
+  
   return (void*) 0;
 }
-
 
 /* consumer_routine - thread that prints characters off the queue */
 void *consumer_routine(void *arg) {
@@ -193,9 +207,16 @@ void *consumer_routine(void *arg) {
       pthread_mutex_unlock(&queue_p->lock);
       sched_yield();
     }
+
+    /* BUG: locks need to be re-aquired before going ot the next loop */
+    pthread_mutex_lock(&queue_p->lock);
+    pthread_mutex_lock(&g_num_prod_lock);
   }
+
+
   pthread_mutex_unlock(&g_num_prod_lock);
   pthread_mutex_unlock(&queue_p->lock);
 
+  printf("\nPrinted %lu characters - inner\n", count); /* added for debugging */
   return (void*) count;
 }
