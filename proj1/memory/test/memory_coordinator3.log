@@ -1,0 +1,711 @@
+Script started on 2026-09-28 08:56:20+00:00 [TERM="xterm-256color" TTY="/dev/pts/3" COLUMNS="176" LINES="38"]
+[?2004h]0;azureuser@pr1-vm: ~/omscs-6210/proj1/memory/test[01;32mazureuser@pr1-vm[00m:[01;34m~/omscs-6210/proj1/memory/test[00m$ exitpython3 monitor.py -t runtest2.py [1P[1@3
+[?2004l
+----------------------------------------------------------------------------------------------------
+Iteration number :  1
+Memory (VM: aos_vm4)  Actual [448.0], Unused: [232.265625]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [234.5234375]
+Memory (VM: aos_vm3)  Actual [448.0], Unused: [234.671875]
+Memory (VM: aos_vm2)  Actual [448.0], Unused: [234.87890625]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  2
+Memory (VM: aos_vm4)  Actual [448.0], Unused: [232.265625]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [234.5234375]
+Memory (VM: aos_vm3)  Actual [448.0], Unused: [234.671875]
+Memory (VM: aos_vm2)  Actual [448.0], Unused: [234.87890625]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  3
+Memory (VM: aos_vm4)  Actual [448.0], Unused: [232.265625]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [234.5546875]
+Memory (VM: aos_vm3)  Actual [448.0], Unused: [234.671875]
+Memory (VM: aos_vm2)  Actual [448.0], Unused: [234.87890625]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  4
+Memory (VM: aos_vm4)  Actual [448.0], Unused: [232.265625]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [234.5546875]
+Memory (VM: aos_vm3)  Actual [448.0], Unused: [234.671875]
+Memory (VM: aos_vm2)  Actual [448.0], Unused: [234.87890625]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  5
+Memory (VM: aos_vm4)  Actual [448.0], Unused: [232.265625]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [234.5546875]
+Memory (VM: aos_vm3)  Actual [448.0], Unused: [234.671875]
+Memory (VM: aos_vm2)  Actual [448.0], Unused: [234.87890625]
+Start testcase 3
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  6
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [296.203125]
+Memory (VM: aos_vm1)  Actual [512.0], Unused: [298.36328125]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.6953125]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.55859375]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  7
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [266.3046875]
+Memory (VM: aos_vm1)  Actual [512.0], Unused: [268.75390625]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.73046875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.57421875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  8
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [223.31640625]
+Memory (VM: aos_vm1)  Actual [512.0], Unused: [225.40234375]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.73046875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.57421875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  9
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [178.51171875]
+Memory (VM: aos_vm1)  Actual [512.0], Unused: [180.4765625]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.73046875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.57421875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  10
+Memory (VM: aos_vm4)  Actual [612.0], Unused: [234.97265625]
+Memory (VM: aos_vm1)  Actual [612.0], Unused: [236.6640625]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.73046875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.57421875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  11
+Memory (VM: aos_vm4)  Actual [612.0], Unused: [191.5]
+Memory (VM: aos_vm1)  Actual [612.0], Unused: [193.0703125]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.76171875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.57421875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  12
+Memory (VM: aos_vm4)  Actual [712.0], Unused: [248.77734375]
+Memory (VM: aos_vm1)  Actual [712.0], Unused: [250.10546875]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.76171875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.57421875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  13
+Memory (VM: aos_vm4)  Actual [712.0], Unused: [205.0625]
+Memory (VM: aos_vm1)  Actual [712.0], Unused: [206.26953125]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.76171875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.57421875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  14
+Memory (VM: aos_vm4)  Actual [812.0], Unused: [262.33984375]
+Memory (VM: aos_vm1)  Actual [812.0], Unused: [263.546875]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.76171875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.57421875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  15
+Memory (VM: aos_vm4)  Actual [812.0], Unused: [218.8671875]
+Memory (VM: aos_vm1)  Actual [812.0], Unused: [220.07421875]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.76171875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.60546875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  16
+Memory (VM: aos_vm4)  Actual [912.0], Unused: [275.90234375]
+Memory (VM: aos_vm1)  Actual [912.0], Unused: [276.98828125]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.76171875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.60546875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  17
+Memory (VM: aos_vm4)  Actual [912.0], Unused: [232.4296875]
+Memory (VM: aos_vm1)  Actual [912.0], Unused: [233.515625]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.76171875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.60546875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  18
+Memory (VM: aos_vm4)  Actual [912.0], Unused: [189.19921875]
+Memory (VM: aos_vm1)  Actual [912.0], Unused: [189.80078125]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.76171875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.60546875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  19
+Memory (VM: aos_vm4)  Actual [912.0], Unused: [695.92578125]
+Memory (VM: aos_vm1)  Actual [1012.0], Unused: [246.47265625]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.76171875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.60546875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  20
+Memory (VM: aos_vm4)  Actual [712.0], Unused: [512.953125]
+Memory (VM: aos_vm1)  Actual [1012.0], Unused: [202.8125]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.76171875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.60546875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  21
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [325.86328125]
+Memory (VM: aos_vm1)  Actual [1112.0], Unused: [259.84765625]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.76171875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.60546875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  22
+Memory (VM: aos_vm4)  Actual [412.0], Unused: [195.9296875]
+Memory (VM: aos_vm1)  Actual [1112.0], Unused: [216.6171875]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.76171875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.60546875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  23
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.2578125]
+Memory (VM: aos_vm1)  Actual [1212.0], Unused: [273.41015625]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.76171875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.60546875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  24
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.13671875]
+Memory (VM: aos_vm1)  Actual [1212.0], Unused: [230.1796875]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.76171875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.60546875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  25
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.13671875]
+Memory (VM: aos_vm1)  Actual [1212.0], Unused: [186.5859375]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.76171875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.60546875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  26
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.13671875]
+Memory (VM: aos_vm1)  Actual [1312.0], Unused: [243.53125]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.76171875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.60546875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  27
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.13671875]
+Memory (VM: aos_vm1)  Actual [1312.0], Unused: [200.05859375]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.76171875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.60546875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  28
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.13671875]
+Memory (VM: aos_vm1)  Actual [1412.0], Unused: [189.26171875]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.76171875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.60546875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  29
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.13671875]
+Memory (VM: aos_vm1)  Actual [1412.0], Unused: [313.88671875]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.76171875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.60546875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  30
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.13671875]
+Memory (VM: aos_vm1)  Actual [1512.0], Unused: [271.01953125]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.76171875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.41796875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  31
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.13671875]
+Memory (VM: aos_vm1)  Actual [1512.0], Unused: [227.546875]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.76171875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.41796875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  32
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.13671875]
+Memory (VM: aos_vm1)  Actual [1612.0], Unused: [184.31640625]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.79296875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.41796875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  33
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.13671875]
+Memory (VM: aos_vm1)  Actual [1612.0], Unused: [241.59375]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.79296875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.41796875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  34
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.13671875]
+Memory (VM: aos_vm1)  Actual [1712.0], Unused: [198.12109375]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.79296875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.41796875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  35
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.13671875]
+Memory (VM: aos_vm1)  Actual [1712.0], Unused: [255.03515625]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.79296875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.44921875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  36
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.13671875]
+Memory (VM: aos_vm1)  Actual [1712.0], Unused: [211.5625]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.79296875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.44921875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  37
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.13671875]
+Memory (VM: aos_vm1)  Actual [1812.0], Unused: [268.35546875]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.79296875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.44921875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  38
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.13671875]
+Memory (VM: aos_vm1)  Actual [1812.0], Unused: [225.00390625]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.79296875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.44921875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  39
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.13671875]
+Memory (VM: aos_vm1)  Actual [1912.0], Unused: [181.41015625]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.79296875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.44921875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  40
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.13671875]
+Memory (VM: aos_vm1)  Actual [1912.0], Unused: [238.4453125]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.79296875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.44921875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  41
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.13671875]
+Memory (VM: aos_vm1)  Actual [2012.0], Unused: [194.8515625]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.79296875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.44921875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  42
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.13671875]
+Memory (VM: aos_vm1)  Actual [2012.0], Unused: [251.88671875]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.79296875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.44921875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  43
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.13671875]
+Memory (VM: aos_vm1)  Actual [2012.0], Unused: [208.29296875]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.79296875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.44921875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  44
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.16796875]
+Memory (VM: aos_vm1)  Actual [2048.0], Unused: [201.02734375]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.79296875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.44921875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  45
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.16796875]
+Memory (VM: aos_vm1)  Actual [2048.0], Unused: [157.5546875]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.79296875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.44921875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  46
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.16796875]
+Memory (VM: aos_vm1)  Actual [2048.0], Unused: [111.66015625]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.60546875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.44921875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  47
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.16796875]
+Memory (VM: aos_vm1)  Actual [2048.0], Unused: [65.390625]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.60546875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.44921875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  48
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.16796875]
+Memory (VM: aos_vm1)  Actual [2048.0], Unused: [70.421875]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.60546875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.44921875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  49
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.16796875]
+Memory (VM: aos_vm1)  Actual [1848.0], Unused: [1770.578125]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.60546875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.44921875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  50
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.16796875]
+Memory (VM: aos_vm1)  Actual [1648.0], Unused: [1570.65234375]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.60546875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.44921875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  51
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.16796875]
+Memory (VM: aos_vm1)  Actual [1448.0], Unused: [1370.60546875]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.60546875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.44921875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  52
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.16796875]
+Memory (VM: aos_vm1)  Actual [1248.0], Unused: [1170.6796875]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.63671875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.44921875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  53
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.16796875]
+Memory (VM: aos_vm1)  Actual [1048.0], Unused: [970.6328125]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.63671875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.44921875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  54
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.16796875]
+Memory (VM: aos_vm1)  Actual [848.0], Unused: [770.5859375]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.63671875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.44921875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  55
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.16796875]
+Memory (VM: aos_vm1)  Actual [648.0], Unused: [570.66015625]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.63671875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.44921875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  56
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.16796875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [370.61328125]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.63671875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.44921875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  57
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.16796875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [270.58984375]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.63671875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.48046875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  58
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.16796875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [270.58984375]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.63671875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.48046875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  59
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.16796875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [270.58984375]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.63671875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.48046875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  60
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.16796875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [270.58984375]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.63671875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.48046875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  61
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.16796875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [270.62109375]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.63671875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.48046875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  62
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.16796875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [270.62109375]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.63671875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.48046875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  63
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.16796875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [270.62109375]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.63671875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.48046875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  64
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.16796875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [270.62109375]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.63671875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.48046875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  65
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.19921875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [270.62109375]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.63671875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.48046875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  66
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.19921875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [270.62109375]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.63671875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.48046875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  67
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.19921875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [270.7421875]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.63671875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.48046875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  68
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.19921875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [270.7421875]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.63671875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.48046875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  69
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.19921875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [270.7421875]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.63671875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.48046875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  70
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.19921875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [270.7421875]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.63671875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.48046875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  71
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.19921875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [270.7421875]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.63671875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.48046875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  72
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.19921875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [270.7421875]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.63671875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.48046875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  73
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.19921875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [270.7421875]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.63671875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.48046875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  74
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.19921875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [270.7421875]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.66796875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.48046875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  75
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.19921875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [270.7421875]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.66796875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.48046875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  76
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.19921875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [270.7421875]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.66796875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.48046875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  77
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.19921875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [270.7421875]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.66796875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.51171875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  78
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.19921875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [270.62109375]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.66796875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.51171875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  79
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.19921875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [270.62109375]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.66796875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.51171875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  80
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.19921875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [270.62109375]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.66796875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.51171875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  81
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.19921875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [270.65234375]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.66796875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.51171875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  82
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.19921875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [269.3203125]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.66796875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.51171875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  83
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.19921875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [269.3203125]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.66796875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.51171875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  84
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.19921875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [269.3203125]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.66796875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.51171875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  85
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.23046875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [269.3203125]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.66796875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.51171875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  86
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.23046875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [269.3203125]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.66796875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.51171875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  87
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.23046875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [269.3203125]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.66796875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.51171875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  88
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.23046875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [269.3203125]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.66796875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.51171875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  89
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.23046875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [269.3203125]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.66796875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.51171875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  90
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.23046875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [269.3203125]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.66796875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.51171875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  91
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.23046875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [269.3203125]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.66796875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.51171875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  92
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.23046875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [269.3203125]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.66796875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.51171875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  93
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.23046875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [269.3203125]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.66796875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.51171875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  94
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.23046875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [269.3203125]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.69921875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.51171875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  95
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.23046875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [269.3203125]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.69921875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.51171875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  96
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.23046875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [269.3203125]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.69921875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.51171875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  97
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.23046875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [269.3203125]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.69921875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.51171875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  98
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.23046875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [269.3203125]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.69921875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.54296875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  99
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.23046875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [269.3203125]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.69921875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.54296875]
+
+----------------------------------------------------------------------------------------------------
+Iteration number :  100
+Memory (VM: aos_vm4)  Actual [512.0], Unused: [295.23046875]
+Memory (VM: aos_vm1)  Actual [448.0], Unused: [269.3203125]
+Memory (VM: aos_vm3)  Actual [512.0], Unused: [298.69921875]
+Memory (VM: aos_vm2)  Actual [512.0], Unused: [298.54296875]
+[?2004h]0;azureuser@pr1-vm: ~/omscs-6210/proj1/memory/test[01;32mazureuser@pr1-vm[00m:[01;34m~/omscs-6210/proj1/memory/test[00m$ run: no process found
+run: no process found
+run: no process found
+run: no process found
+exit
+[?2004lexit
+
+Script done on 2026-09-28 09:00:22+00:00 [COMMAND_EXIT_CODE="0"]
