@@ -13,6 +13,148 @@ unsigned long long total_memory(void) {
     return total;
 }
 
+void test_memory_plan_actions(void) {
+    reset(3);
+    MemorySample samples[3];
+    MemoryReading readings[3];
+    memset(samples, 0, sizeof(samples));
+    memset(readings, 0, sizeof(readings));
+    for (int d = 0; d < 3; d++) {
+        strcpy(samples[d].uuid, guests[d].uuid);
+        samples[d].domain_id = guests[d].id;
+        samples[d].domain_index = d;
+        readings[d].stats_ok = readings[d].have_actual = 1;
+        readings[d].have_unused = readings[d].have_updated = 1;
+        readings[d].actual = 512 * KIB;
+        readings[d].updated = 1;
+        readings[d].maximum = 2048 * KIB;
+    }
+    readings[0].unused = 100 * KIB;
+    readings[1].unused = 150 * KIB;
+    readings[2].unused = 400 * KIB;
+    MemorySnapshot snapshot = {.samples = samples, .readings = readings,
+                               .ndomains = 3, .host_free_kib = 350 * KIB};
+    MemoryAction *actions = NULL;
+    int count = 0;
+    assert(plan_memory_actions(&snapshot, &actions, &count) == 0);
+    assert(sets == 0 && count == 3);
+    assert(!actions[0].grow && actions[0].target == 412 * KIB);
+    assert(!strcmp(samples[actions[0].sample_index].uuid, guests[2].uuid));
+    assert(actions[1].grow && actions[1].target == 612 * KIB);
+    assert(!strcmp(samples[actions[1].sample_index].uuid, guests[0].uuid));
+    assert(actions[2].grow && actions[2].target == 562 * KIB);
+    assert(!strcmp(samples[actions[2].sample_index].uuid, guests[1].uuid));
+    free(actions);
+    puts("Memory: pure plan returns donor and hungry guest targets in priority order");
+}
+
+void test_pending_memory(int grow) {
+    reset(1);
+    guests[0].unused = (grow ? 100 : 400) * KIB;
+    unsigned long target = (grow ? 612 : 412) * KIB;
+    unsigned long long pool = total_memory();
+    run(); assert(sets == 1); assert(guests[0].target == target);
+    for (int round = 0; round < 3; round++) {
+        run(); assert(sets == 1); // Unchanged timestamp and allocation.
+        tick(2); run(); assert(sets == 1); // Fresh stats, balloon still unchanged.
+    }
+
+    // Partial completion leaves unused memory outside the stable band.
+    if (grow) {
+        guests[0].actual += 40 * KIB; guests[0].unused += 40 * KIB; host_free -= 40 * KIB;
+    } else {
+        guests[0].actual -= 40 * KIB; guests[0].unused -= 40 * KIB; host_free += 40 * KIB;
+    }
+    for (int round = 0; round < 3; round++) {
+        run(); assert(sets == 1);
+        tick(2); run(); assert(sets == 1);
+        assert(guests[0].target == target);
+        assert(total_memory() == pool);
+    }
+    settle_memory(); tick(2); run(); assert(sets == 1);
+    assert(guests[0].actual == target); assert(guests[0].target == 0);
+    assert(total_memory() == pool);
+    printf("Memory: pending %s is not repeated during partial completion\n", grow ? "growth" : "reclamation");
+}
+
+void test_failed_memory_retry(int grow) {
+    reset(1);
+    guests[0].unused = (grow ? 100 : 400) * KIB;
+    guests[0].fail_set = 1;
+    run(); assert(sets == 1); assert(guests[0].target == 0);
+    run(); assert(sets == 1); // A failed call does not make stale stats usable.
+    tick(2); run(); assert(sets == 2); assert(guests[0].target == 0);
+    guests[0].fail_set = 0;
+    run(); assert(sets == 2);
+    tick(2); run(); assert(sets == 3);
+    assert(guests[0].target == (grow ? 612 : 412) * KIB);
+    tick(2); run(); assert(sets == 3);
+    settle_memory(); tick(2); run(); assert(sets == 3);
+    printf("Memory: failed %s retries only on fresh samples\n", grow ? "growth" : "reclamation");
+}
+
+void test_fixed_grant_targets(void) {
+    reset(2);
+    guests[0].unused = guests[1].unused = 100 * KIB;
+    host_free = 350 * KIB; // 150 MiB grant budget: 100 for the first guest, 50 for the second.
+    guests[0].fail_set = 1;
+    run(); assert(sets == 2);
+    assert(guests[0].target == 0 && guests[1].target == 562 * KIB);
+    guests[0].fail_set = 0;
+    tick(2); run(); assert(sets == 3);
+    assert(guests[0].target == 612 * KIB && guests[1].target == 562 * KIB);
+    settle_memory(); assert(host_free == 200 * KIB);
+    puts("Memory: failed first grant leaves later fixed target unchanged");
+}
+
+void test_memory_update_suppression(void) {
+    reset(3);
+    for (int d = 0; d < 3; d++) guests[d].unused = (200 + d * 50) * KIB;
+    for (int round = 0; round < 6; round++) {
+        tick(2); run(); assert(sets == 0);
+    }
+    puts("Memory: fresh unchanged statistics in the stable band need no requests");
+
+    reset(2);
+    guests[0].actual = guests[0].maximum = 600 * KIB;
+    guests[1].actual = 2048 * KIB; guests[1].maximum = 4096 * KIB;
+    guests[0].unused = guests[1].unused = 100 * KIB;
+    for (int round = 0; round < 6; round++) {
+        tick(2); run(); assert(sets == 0);
+    }
+    puts("Memory: guests at configured or project ceilings need no requests");
+
+    test_pending_memory(1);
+    test_pending_memory(0);
+    test_failed_memory_retry(1);
+    test_failed_memory_retry(0);
+    test_fixed_grant_targets();
+
+    reset(1); guests[0].unused = 150 * KIB;
+    run(); assert(sets == 1); assert(guests[0].target == 612 * KIB);
+    settle_memory(); tick(2); run(); assert(sets == 1);
+    assert(guests[0].actual == 612 * KIB);
+    guests[0].unused = 400 * KIB;
+    tick(2); run(); assert(sets == 2); assert(guests[0].target == 512 * KIB);
+    settle_memory(); tick(2); run(); assert(sets == 2);
+    assert(guests[0].actual == 512 * KIB);
+    guests[0].unused = 150 * KIB;
+    tick(2); run(); assert(sets == 3); assert(guests[0].target == 612 * KIB);
+    settle_memory(); tick(2); run(); assert(sets == 3);
+    assert(guests[0].actual == 612 * KIB);
+    puts("Memory: completed grow-shrink-grow can reuse an earlier target");
+
+    for (unsigned long budget = 1; budget < 4; budget++) {
+        reset(1); guests[0].unused = 100 * KIB; host_free = 200 * KIB + budget;
+        run(); assert(sets == 0);
+        tick(2); run(); assert(sets == 0);
+    }
+    host_free = 200 * KIB + 4;
+    tick(2); run(); assert(sets == 1); assert(guests[0].target == 512 * KIB + 4);
+    settle_memory(); assert(host_free == 200 * KIB);
+    puts("Memory: sub-page budgets cause no requests; one page permits a grant");
+}
+
 void simulate_memory(const char *name, int consumers, int stop_first_early) {
     reset(4);
     host_free = 8192 * KIB;
@@ -67,6 +209,8 @@ void simulate_memory(const char *name, int consumers, int stop_first_early) {
 
 int main(void) {
     setbuf(stdout, NULL);
+    test_memory_plan_actions();
+    test_memory_update_suppression();
     reset(4); guests[0].unused = 150 * KIB;
     for (int d = 1; d < 4; d++) guests[d].unused = 400 * KIB;
     run(); assert(sets == 4); assert(guests[0].target == 612 * KIB);
@@ -107,9 +251,11 @@ int main(void) {
     guests[0].missing = 1; guests[1].updated = 0; run(); assert(sets == 0);
     guests[0].missing = 0; guests[1].updated = 1; host_free = 0; run(); assert(sets == 0);
     host_free = 200 * KIB; tick(2); run(); assert(sets == 0);
-    host_free = 300 * KIB; tick(2); guests[0].fail_set = 1; run(); assert(sets == 2);
-    assert(guests[0].target == 0); assert(guests[1].target == 612 * KIB);
-    puts("Memory: missing stats, host query failure, low memory, and failed grants handled");
+    host_free = 300 * KIB; tick(2); guests[0].fail_set = 1; run(); assert(sets == 1);
+    assert(guests[0].target == 0); assert(guests[1].target == 0);
+    guests[0].unused = 250 * KIB; tick(2); run(); assert(sets == 2);
+    assert(guests[1].target == 612 * KIB);
+    puts("Memory: missing stats, low memory, and failed grant budget reused next cycle");
 
     reset(1); guests[0].unused = 150 * KIB; run(); assert(sets == 1);
     guests[0].id++; guests[0].target = 0; run(); assert(sets == 2);

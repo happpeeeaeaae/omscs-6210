@@ -13,6 +13,33 @@ void check_counts(int each) {
     for (int c = 0; c < cpu_count; c++) if (VIR_CPU_USED(host_online, c)) assert(counts[c] == each);
 }
 
+void test_cpu_plan_actions(void) {
+    reset(2, 2, 1);
+    CpuSample samples[2], previous[2];
+    memset(samples, 0, sizeof(samples));
+    memset(previous, 0, sizeof(previous));
+    for (int d = 0; d < 2; d++) {
+        strcpy(samples[d].uuid, guests[d].uuid);
+        samples[d].domain_id = guests[d].id;
+        samples[d].domain_index = d;
+        samples[d].vcpu = 0;
+        samples[d].current_cpu = 0;
+        samples[d].cpu_time = 1000000000ULL;
+        previous[d] = samples[d];
+        previous[d].cpu_time = 0;
+    }
+    CpuSnapshot snapshot = {.samples = samples, .count = 2, .online = host_online,
+                            .ncpus = 2, .nonline = 2, .sample_time = 2.0};
+    CpuAction *actions = NULL;
+    int count = 0;
+    assert(plan_cpu_actions(&snapshot, previous, 2, 0.0, &actions, &count) == 0);
+    assert(pins == 0 && count == 1);
+    assert(actions[0].target_cpu == 1);
+    assert(!strcmp(samples[actions[0].sample_index].uuid, guests[1].uuid));
+    free(actions);
+    puts("CPU: pure plan identifies the vCPU to move and its target pCPU");
+}
+
 // Check observable distribution, without using the scheduler's own load helper.
 void check_simulated_distribution(const char *name) {
     double demand[4] = {0};
@@ -64,10 +91,18 @@ void simulate_balancing(void) {
 
 int main(void) {
     setbuf(stdout, NULL);
+    test_cpu_plan_actions();
     reset(8, 4, 1);
     for (int d = 0; d < 8; d++) map_to(d, 0, d % 4);
     run(); assert(pins == 0); tick(2); run(); assert(pins == 0);
     puts("CPU: warmup and balanced pins preserved");
+
+    reset(8, 4, 1);
+    for (int d = 0; d < 8; d++) map_to(d, 0, d / 2);
+    memcpy(guests[0].map[0], host_online, VIR_CPU_MAPLEN(cpu_count));
+    run(); tick(2); run(); check_counts(2); assert(pins == 1);
+    tick(2); run(); assert(pins == 1);
+    puts("CPU: incomplete affinity fixed without moving balanced guests");
 
     reset(8, 4, 1); run(); tick(2); run(); check_counts(2); assert(pins == 6);
     int before = pins; tick(2); run(); assert(pins == before);

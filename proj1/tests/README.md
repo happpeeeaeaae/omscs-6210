@@ -28,6 +28,8 @@ The mock supplies active domains, UUIDs, running IDs, vCPU counts, cumulative CP
 times, affinity masks, balloon statistics, guest memory limits, and host free
 memory. Pin and balloon requests are recorded and checked. Domain handle releases
 are counted, and selected API calls can return errors or incomplete statistics.
+Focused tests also call the decision functions with constructed snapshots to
+check their action lists without making libvirt calls.
 
 ## CPU checks
 
@@ -50,8 +52,17 @@ Reported demand can exceed 100% even though measured utilization is capped.
 - Guest and host reserves, a shared allocation budget, and partial grants.
 - Configured guest limits and the 2048 MiB project ceiling.
 - Missing/stale statistics, delayed balloon responses, and failed memory requests.
+- No redundant requests for fresh unchanged statistics in the stable band,
+  guests at either allocation ceiling, or host budgets smaller than one page.
+- Pending growth and reclamation across repeated and partially completed
+  observations, failed-request retries on fresh samples, and reuse of a previous
+  target after completed grow–shrink–grow changes.
+- Fixed grant targets: budget reserved for a failed grant is reconsidered on
+  the next fresh sample, rather than reassigned later in the same cycle.
 - Reservations for pending grants, restarts, and a failed UUID query followed by
   recovery without duplicating a grant.
+
+The memory mock rejects every request equal to the guest's current allocation.
 
 Three simulations run 100 rounds each: one consumer, four consumers, and two
 consumers where one finishes early. Consumers add 40 MiB of used memory per round
@@ -60,8 +71,9 @@ guest allocation and host free memory. Assertions check gradual adjustments,
 conservation of memory, reserves, reaching the maximum, and eventual reclamation.
 Output reports each guest's peak and final allocation in MiB.
 
-Some `Could not pin` and `Could not give memory` messages are expected: those cases
-intentionally inject API failures and then check recovery.
+Some `Could not pin`, `Could not give memory`, and `Could not reclaim memory`
+messages are expected: those cases intentionally inject API failures and then
+check recovery.
 
 ## Limits
 
