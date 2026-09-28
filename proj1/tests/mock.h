@@ -12,7 +12,8 @@ struct FakeDomain {
     virVcpuInfo v[4]; unsigned char map[4][32]; double rate[4];
     unsigned long actual, unused, maximum, target;
     unsigned long long updated;
-    int fail_stats, fail_pin, fail_set, fail_uuid, missing, pin_calls, set_calls;
+    int fail_stats, fail_stats_period, fail_pin, fail_set, fail_uuid;
+    int missing, omit_last_update, pin_calls, set_calls;
 };
 struct FakeDomain guests[16];
 int guest_count, cpu_count, pins, sets, refs, frees, last_maplen;
@@ -113,13 +114,19 @@ int virDomainPinVcpu(virDomainPtr dom, unsigned int vcpu, unsigned char *map, in
     return 0;
 }
 int virDomainFree(virDomainPtr dom) { frees++; return 0; }
-int virDomainSetMemoryStatsPeriod(virDomainPtr dom, int period, unsigned int flags) { assert(period > 0); return 0; }
+int virDomainSetMemoryStatsPeriod(virDomainPtr dom, int period, unsigned int flags) {
+    assert(period > 0);
+    return dom->fail_stats_period ? -1 : 0;
+}
 int virDomainMemoryStats(virDomainPtr dom, virDomainMemoryStatStruct *stats, unsigned int nstats, unsigned int flags) {
     if (dom->fail_stats) return -1;
-    stats[0] = (virDomainMemoryStatStruct){VIR_DOMAIN_MEMORY_STAT_LAST_UPDATE, dom->updated};
-    stats[1] = (virDomainMemoryStatStruct){VIR_DOMAIN_MEMORY_STAT_ACTUAL_BALLOON, dom->actual};
-    stats[2] = (virDomainMemoryStatStruct){VIR_DOMAIN_MEMORY_STAT_UNUSED, dom->unused};
-    return dom->missing ? 2 : 3;
+    int statistic_count = 0;
+    if (!dom->omit_last_update)
+        stats[statistic_count++] = (virDomainMemoryStatStruct){VIR_DOMAIN_MEMORY_STAT_LAST_UPDATE, dom->updated};
+    stats[statistic_count++] = (virDomainMemoryStatStruct){VIR_DOMAIN_MEMORY_STAT_ACTUAL_BALLOON, dom->actual};
+    if (!dom->missing)
+        stats[statistic_count++] = (virDomainMemoryStatStruct){VIR_DOMAIN_MEMORY_STAT_UNUSED, dom->unused};
+    return statistic_count;
 }
 int virDomainSetMemory(virDomainPtr dom, unsigned long target) {
     sets++; dom->set_calls++;

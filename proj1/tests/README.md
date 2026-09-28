@@ -52,6 +52,8 @@ Reported demand can exceed 100% even though measured utilization is capped.
 - Guest and host reserves, a shared allocation budget, and partial grants.
 - Configured guest limits and the 2048 MiB project ceiling.
 - Missing/stale statistics, delayed balloon responses, and failed memory requests.
+- Missing `LAST_UPDATE` with valid balloon readings, failed statistics-period
+  setup, and rate-limited retries after failed requests without timestamps.
 - No redundant requests for fresh unchanged statistics in the stable band,
   guests at either allocation ceiling, or host budgets smaller than one page.
 - Pending growth and reclamation across repeated and partially completed

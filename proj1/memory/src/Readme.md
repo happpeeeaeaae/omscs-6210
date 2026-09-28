@@ -37,10 +37,16 @@ Reclaimed memory enters the budget only when the host reports it free on a
 later pass.
 
 The 200/300 MiB gap avoids switching a VM back and forth when its unused
-memory fluctuates near a threshold. Missing, invalid, or unchanged guest
-statistics produce no action. Failed libvirt requests can be retried after
-new statistics arrive. A still-pending request blocks another request to
-the same VM.
+memory fluctuates near a threshold. Actual and unused memory must both be
+valid. When `LAST_UPDATE` is available, it must advance before another
+decision; when libvirt omits it, valid balloon readings are still used.
+A failed request on that fallback path is retried no more than once every
+three passes. A still-pending request blocks another request to the same
+VM, and a target equal to the observed allocation is never sent.
+
+Set `MEMORY_DEBUG=1` to see sampled sizes, host grant budget, and reasons
+that a VM cannot grow. Statistics are read even if enabling their collection
+period fails, since another process may already have enabled collection.
 
 This is a deliberately small greedy adaptation of the ideas in Carl
 Waldspurger's [*Memory Resource Management in VMware ESX Server*](https://usenix.org/legacy/events/osdi02/tech/waldspurger/waldspurger_html/esx-mem-html.html)

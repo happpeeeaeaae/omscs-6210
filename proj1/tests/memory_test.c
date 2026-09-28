@@ -85,6 +85,77 @@ void test_failed_memory_retry(int grow) {
     printf("Memory: failed %s retries only on fresh samples\n", grow ? "growth" : "reclamation");
 }
 
+void test_missing_timestamp_fallback(void) {
+    reset(1);
+    guests[0].omit_last_update = 1;
+    guests[0].unused = 100 * KIB;
+
+    run();
+    assert(sets == 1 && guests[0].target == 612 * KIB);
+    for (int round = 0; round < 4; ++round) {
+        run();
+        assert(sets == 1);
+    }
+
+    settle_memory();
+    guests[0].unused = 150 * KIB;
+    run();
+    assert(sets == 2 && guests[0].target == 712 * KIB);
+
+    reset(1);
+    guests[0].omit_last_update = 1;
+    guests[0].missing = 1;
+    guests[0].unused = 100 * KIB;
+    run();
+    assert(sets == 0);
+    puts("Memory: missing timestamp permits valid samples, but missing unused memory does not");
+}
+
+void test_failed_timestamp_free_retry(void) {
+    reset(1);
+    guests[0].omit_last_update = 1;
+    guests[0].unused = 100 * KIB;
+    guests[0].fail_set = 1;
+
+    run();
+    assert(sets == 1);
+    run();
+    run();
+    assert(sets == 1);
+    run();
+    assert(sets == 2);
+
+    guests[0].fail_set = 0;
+    run();
+    run();
+    assert(sets == 2);
+    run();
+    assert(sets == 3 && guests[0].target == 612 * KIB);
+    puts("Memory: timestamp-free failures retry once every three passes");
+}
+
+void test_statistics_setup_failure(void) {
+    reset(1);
+    guests[0].fail_stats_period = 1;
+    guests[0].omit_last_update = 1;
+    guests[0].unused = 100 * KIB;
+    run();
+    assert(sets == 1 && guests[0].target == 612 * KIB);
+    puts("Memory: available statistics remain usable when period setup fails");
+}
+
+void test_noop_target_is_not_sent(void) {
+    reset(1);
+    VmRecord record = {.domain_handle = &guests[0]};
+    record.memory.actual_kib = guests[0].actual;
+    VmMap snapshot = {.records = &record, .count = 1};
+    MemoryTarget target = {.record_index = 0, .target_kib = guests[0].actual};
+    MemoryPlan plan = {.targets = &target, .count = 1};
+    apply_memory_targets(&snapshot, &plan);
+    assert(sets == 0);
+    puts("Memory: unchanged target is never sent to libvirt");
+}
+
 void test_fixed_grant_targets(void) {
     reset(2);
     guests[0].unused = guests[1].unused = 100 * KIB;
@@ -202,6 +273,10 @@ void simulate_memory(const char *name, int consumers, int stop_first_early) {
 int main(void) {
     setbuf(stdout, NULL);
     test_memory_plan_actions();
+    test_missing_timestamp_fallback();
+    test_failed_timestamp_free_retry();
+    test_statistics_setup_failure();
+    test_noop_target_is_not_sent();
     test_memory_update_suppression();
     reset(4); guests[0].unused = 150 * KIB;
     for (int d = 1; d < 4; d++) guests[d].unused = 400 * KIB;

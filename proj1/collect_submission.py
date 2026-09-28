@@ -3,10 +3,6 @@ import shutil
 import sys
 import re
 
-from os import listdir
-from os.path import isfile, join
-
-
 def checkSubmission(requiredFiles, required=True):
     allOk = True
     missingFiles = []
@@ -27,12 +23,25 @@ def _copy_all_files(src_dir: Path, dst_dir: Path, label: str):
     if not src_dir.is_dir():
         raise NotADirectoryError(f"ERROR:{label} path {src_dir} is not a directory")
 
-    files = [str(src_dir / f) for f in listdir(src_dir) if isfile(join(src_dir, f))]
-    print(files)
+    allowed_names = {"Makefile", "Readme.md"}
+    allowed_suffixes = {".c", ".h", ".log"}
+    files = [
+        source for source in sorted(src_dir.iterdir())
+        if source.is_file() and
+        (source.name in allowed_names or source.suffix in allowed_suffixes)
+    ]
+    print([str(source) for source in files])
 
-    for f in files:
-        print("copying " + f)
-        shutil.copy2(f, dst_dir / Path(f).name)
+    for source in files:
+        print("copying " + str(source))
+        shutil.copy2(source, dst_dir / source.name)
+
+    log_prefix = "vcpu_scheduler" if src_dir.parent.name == "cpu" else "memory_coordinator"
+    test_dir = src_dir.parent / "test"
+    for source in sorted(test_dir.glob(log_prefix + "*.log")):
+        if not (dst_dir / source.name).exists():
+            print("copying " + str(source))
+            shutil.copy2(source, dst_dir / source.name)
 
 def sanitize_name(name: str) -> str:
     name = name.strip().lower()
@@ -93,7 +102,10 @@ if __name__ == "__main__":
             "memory/src/memory_coordinator2.log",
             "memory/src/memory_coordinator3.log",
         ]
-        logAllOk, _ = checkSubmission(logFiles, required=False)
+        logAllOk = all(
+            Path(log_file).is_file() or Path(log_file.replace("/src/", "/test/")).is_file()
+            for log_file in logFiles
+        )
         if not logAllOk:
             print("Warning. Some log files are missing")
         else:
