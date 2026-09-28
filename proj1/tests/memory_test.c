@@ -15,36 +15,28 @@ unsigned long long total_memory(void) {
 
 void test_memory_plan_actions(void) {
     reset(3);
-    MemorySample samples[3];
-    MemoryReading readings[3];
-    memset(samples, 0, sizeof(samples));
-    memset(readings, 0, sizeof(readings));
+    VmRecord records[3] = {0};
     for (int d = 0; d < 3; d++) {
-        strcpy(samples[d].uuid, guests[d].uuid);
-        samples[d].domain_id = guests[d].id;
-        samples[d].domain_index = d;
-        readings[d].stats_ok = readings[d].have_actual = 1;
-        readings[d].have_unused = readings[d].have_updated = 1;
-        readings[d].actual = 512 * KIB;
-        readings[d].updated = 1;
-        readings[d].maximum = 2048 * KIB;
+        strcpy(records[d].uuid, guests[d].uuid);
+        records[d].domain_id = guests[d].id;
+        records[d].memory.actual_kib = 512 * KIB;
+        records[d].memory.maximum_kib = 2048 * KIB;
+        records[d].memory.fresh = true;
     }
-    readings[0].unused = 100 * KIB;
-    readings[1].unused = 150 * KIB;
-    readings[2].unused = 400 * KIB;
-    MemorySnapshot snapshot = {.samples = samples, .readings = readings,
-                               .ndomains = 3, .host_free_kib = 350 * KIB};
-    MemoryAction *actions = NULL;
-    int count = 0;
-    assert(plan_memory_actions(&snapshot, &actions, &count) == 0);
-    assert(sets == 0 && count == 3);
-    assert(!actions[0].grow && actions[0].target == 412 * KIB);
-    assert(!strcmp(samples[actions[0].sample_index].uuid, guests[2].uuid));
-    assert(actions[1].grow && actions[1].target == 612 * KIB);
-    assert(!strcmp(samples[actions[1].sample_index].uuid, guests[0].uuid));
-    assert(actions[2].grow && actions[2].target == 562 * KIB);
-    assert(!strcmp(samples[actions[2].sample_index].uuid, guests[1].uuid));
-    free(actions);
+    records[0].memory.unused_kib = 100 * KIB;
+    records[1].memory.unused_kib = 150 * KIB;
+    records[2].memory.unused_kib = 400 * KIB;
+    VmMap snapshot = {.records = records, .count = 3};
+    MemoryPlan plan = {0};
+    assert(plan_target_memory(&snapshot, 350 * KIB, &plan));
+    assert(sets == 0 && plan.count == 3);
+    assert(!plan.targets[0].grow && plan.targets[0].target_kib == 412 * KIB);
+    assert(plan.targets[0].record_index == 2);
+    assert(plan.targets[1].grow && plan.targets[1].target_kib == 612 * KIB);
+    assert(plan.targets[1].record_index == 0);
+    assert(plan.targets[2].grow && plan.targets[2].target_kib == 562 * KIB);
+    assert(plan.targets[2].record_index == 1);
+    cleanup_memory_plan(&plan);
     puts("Memory: pure plan returns donor and hungry guest targets in priority order");
 }
 

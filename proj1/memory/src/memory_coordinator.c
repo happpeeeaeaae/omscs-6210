@@ -1,408 +1,473 @@
-#include <stdio.h>
-#include <stdlib.h>
 #include <libvirt/libvirt.h>
-#include <math.h>
-#include <string.h>
-#include <unistd.h>
+
 #include <limits.h>
 #include <signal.h>
-#include <stdarg.h>
-#define MIN(a, b) ((a) < (b) ? a : b)
-#define MAX(a, b) ((a) > (b) ? a : b)
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
-int is_exit = 0; // DO NOT MODIFY THE VARIABLE
+enum {
+    MEMORY_PAGE_KIB = 4,
+    MEMORY_STEP_KIB = 100 * 1024,
+    GUEST_MIN_UNUSED_KIB = 100 * 1024,
+    GROW_BELOW_KIB = 200 * 1024,
+    RECLAIM_ABOVE_KIB = 300 * 1024,
+    HOST_RESERVE_KIB = 200 * 1024,
+    GUEST_MAX_KIB = 2048 * 1024
+};
 
-void MemoryScheduler(virConnectPtr conn, int interval);
+typedef struct {
+    unsigned long long actual_kib;
+    unsigned long long unused_kib;
+    unsigned long long maximum_kib;
+    unsigned long long last_update;
+    unsigned long long pending_target_kib;
+    bool statistics_enabled;
+    bool fresh;
+} VmMemoryState;
 
-/*
-DO NOT CHANGE THE FOLLOWING FUNCTION
-*/
-void signal_callback_handler()
-{
-	printf("Caught Signal");
-	is_exit = 1;
-}
+typedef struct {
+    unsigned int domain_id;
+    char uuid[VIR_UUID_STRING_BUFLEN];
+    virDomainPtr domain_handle;
+    VmMemoryState memory;
+} VmRecord;
 
-/*
-DO NOT CHANGE THE FOLLOWING FUNCTION
-*/
-int main(int argc, char *argv[])
-{
-	virConnectPtr conn;
+/* Up to four guests are tested. This array-backed map uses an ID lookup and
+ * verifies the UUID so a reused libvirt ID cannot inherit another VM's state. */
+typedef struct {
+    VmRecord *records;
+    size_t count;
+} VmMap;
 
-	if (argc != 2)
-	{
-		printf("Incorrect number of arguments\n");
-		return 0;
-	}
+typedef struct {
+    size_t record_index;
+    unsigned long target_kib;
+    bool grow;
+} MemoryTarget;
 
-	// Gets the interval passes as a command line argument and sets it as the STATS_PERIOD for collection of balloon memory statistics of the domains
-	int interval = atoi(argv[1]);
+typedef struct {
+    MemoryTarget *targets;
+    size_t count;
+} MemoryPlan;
 
-	conn = virConnectOpen("qemu:///system");
-	if (conn == NULL)
-	{
-		fprintf(stderr, "Failed to open connection\n");
-		return 1;
-	}
+typedef struct {
+    VmMap history;
+    bool initialized;
+} MemorySchedulerState;
 
-	signal(SIGINT, signal_callback_handler);
-
-	while (!is_exit)
-	{
-		// Calls the MemoryScheduler function after every 'interval' seconds
-		MemoryScheduler(conn, interval);
-		sleep(interval);
-	}
-
-	// Close the connection
-	virConnectClose(conn);
-	return 0;
-}
-
-#define MEMORY_STEP_KIB (100UL * 1024)
-#define GUEST_MIN_UNUSED_KIB (100UL * 1024)
-#define GROW_BELOW_KIB (200UL * 1024)
-#define RECLAIM_ABOVE_KIB (300UL * 1024)
-#define HOST_RESERVE_KIB (200UL * 1024)
-#define GUEST_MAX_KIB (2048UL * 1024)
-
-typedef struct
-{
-	char uuid[VIR_UUID_STRING_BUFLEN];
-	unsigned int domain_id;
-	int domain_index;
-	int stats_period;
-	int usable;
-	unsigned long long last_update;
-	unsigned long long actual;
-	unsigned long long unused;
-	unsigned long long maximum;
-	unsigned long long pending_target;
-} MemorySample;
-
-typedef struct
-{
-	int stats_ok;
-	int have_actual;
-	int have_unused;
-	int have_updated;
-	unsigned long long actual;
-	unsigned long long unused;
-	unsigned long long updated;
-	unsigned long long maximum;
+typedef struct {
+    unsigned long long actual_kib;
+    unsigned long long unused_kib;
+    unsigned long long update;
+    bool has_actual;
+    bool has_unused;
+    bool has_update;
 } MemoryReading;
 
-typedef struct
-{
-	virDomainPtr *domains;
-	int ndomains;
-	MemorySample *samples;
-	MemoryReading *readings;
-	unsigned long long host_free_kib;
-	int debug;
-} MemorySnapshot;
+static MemorySchedulerState scheduler_state;
+static volatile sig_atomic_t is_exit;
 
-typedef struct
-{
-	int sample_index;
-	unsigned long target;
-	int grow;
-} MemoryAction;
+void MemoryScheduler(virConnectPtr connection, int interval);
 
-static void memory_debug(int enabled, const char *format, ...)
+static unsigned long long smaller_value(unsigned long long first,
+                                        unsigned long long second)
 {
-	if (!enabled)
-		return;
-	va_list args;
-	va_start(args, format);
-	fprintf(stderr, "[memory] ");
-	vfprintf(stderr, format, args);
-	fputc('\n', stderr);
-	va_end(args);
+    return first < second ? first : second;
 }
 
-static int compare_unused_memory(const void *left, const void *right)
+static void initialize_memory_scheduler(MemorySchedulerState *state)
 {
-	const MemorySample *a = left, *b = right;
-	if (a->unused != b->unused)
-		return a->unused < b->unused ? -1 : 1;
-	return strcmp(a->uuid, b->uuid);
+    *state = (MemorySchedulerState){.initialized = true};
 }
 
-/* Collect one host and guest snapshot, retaining history only for polling setup. */
-static int read_memory_snapshot(virConnectPtr conn, int interval,
-				const MemorySample *previous, int previous_count,
-				MemorySnapshot *snapshot)
+static virConnectPtr open_hypervisor_connection(void)
 {
-	snapshot->ndomains = virConnectListAllDomains(conn, &snapshot->domains,
-						      VIR_CONNECT_LIST_DOMAINS_ACTIVE);
-	if (snapshot->ndomains < 0)
-	{
-		memory_debug(snapshot->debug, "cannot list active domains: result=%d",
-			     snapshot->ndomains);
-		return -1;
-	}
-	if (snapshot->ndomains == 0)
-	{
-		memory_debug(snapshot->debug, "no active domains");
-		return 0;
-	}
-	snapshot->samples = calloc(snapshot->ndomains, sizeof(*snapshot->samples));
-	snapshot->readings = calloc(snapshot->ndomains, sizeof(*snapshot->readings));
-	if (!snapshot->samples || !snapshot->readings)
-		return -1;
-
-	for (int d = 0; d < snapshot->ndomains; d++)
-	{
-		MemorySample *sample = &snapshot->samples[d];
-		MemoryReading *reading = &snapshot->readings[d];
-		char uuid[VIR_UUID_STRING_BUFLEN];
-		unsigned int id = virDomainGetID(snapshot->domains[d]);
-		if (id == UINT_MAX || virDomainGetUUIDString(snapshot->domains[d], uuid) < 0)
-		{
-			// Keep old history: this guest may still have a grant in flight.
-			memory_debug(snapshot->debug,
-				     "cannot identify domain index=%d; skipping pass and keeping history", d);
-			return -1;
-		}
-		for (int old = 0; old < previous_count; old++)
-			if (previous[old].domain_id == id && !strcmp(previous[old].uuid, uuid))
-			{
-				*sample = previous[old];
-				break;
-			}
-		strcpy(sample->uuid, uuid);
-		sample->domain_id = id;
-		sample->domain_index = d;
-		sample->usable = 0;
-
-		if (sample->stats_period != interval)
-		{
-			int result = virDomainSetMemoryStatsPeriod(snapshot->domains[d],
-								  interval, VIR_DOMAIN_AFFECT_LIVE);
-			memory_debug(snapshot->debug, "%s: stats period=%d result=%d",
-				     sample->uuid, interval, result);
-			if (result < 0)
-				continue;
-			sample->stats_period = interval;
-		}
-		virDomainInfo info;
-		virDomainMemoryStatStruct stats[VIR_DOMAIN_MEMORY_STAT_NR];
-		if (virDomainGetInfo(snapshot->domains[d], &info) < 0)
-		{
-			memory_debug(snapshot->debug, "%s: cannot read domain info", sample->uuid);
-			continue;
-		}
-		int nstats = virDomainMemoryStats(snapshot->domains[d], stats,
-						  VIR_DOMAIN_MEMORY_STAT_NR, 0);
-		if (nstats < 0)
-		{
-			memory_debug(snapshot->debug, "%s: cannot read memory stats: result=%d",
-				     sample->uuid, nstats);
-			continue;
-		}
-		reading->stats_ok = 1;
-		reading->maximum = info.maxMem;
-		for (int s = 0; s < nstats; s++)
-		{
-			if (stats[s].tag == VIR_DOMAIN_MEMORY_STAT_ACTUAL_BALLOON)
-			{
-				reading->actual = stats[s].val;
-				reading->have_actual = 1;
-			}
-			else if (stats[s].tag == VIR_DOMAIN_MEMORY_STAT_UNUSED)
-			{
-				reading->unused = stats[s].val;
-				reading->have_unused = 1;
-			}
-			else if (stats[s].tag == VIR_DOMAIN_MEMORY_STAT_LAST_UPDATE)
-			{
-				reading->updated = stats[s].val;
-				reading->have_updated = 1;
-			}
-		}
-	}
-	snapshot->host_free_kib = virNodeGetFreeMemory(conn) / 1024;
-	return 1;
+    virConnectPtr connection = virConnectOpen("qemu:///system");
+    if (connection == NULL)
+        fprintf(stderr, "Failed to open libvirt connection\n");
+    return connection;
 }
 
-/* Select complete targets from measured memory, without making libvirt calls. */
-static int plan_memory_actions(MemorySnapshot *snapshot,
-			       MemoryAction **actions, int *action_count)
+static void cleanup_vm_map(VmMap *map)
 {
-	*actions = calloc(snapshot->ndomains, sizeof(**actions));
-	if (!*actions)
-		return -1;
-	for (int d = 0; d < snapshot->ndomains; d++)
-	{
-		MemorySample *sample = &snapshot->samples[d];
-		const MemoryReading *reading = &snapshot->readings[d];
-		if (!reading->stats_ok)
-			continue;
-		if (reading->have_actual)
-			sample->actual = reading->actual;
-		memory_debug(snapshot->debug,
-			     "%s: stats actual_kib=%llu unused_kib=%llu last_update=%llu "
-			     "previous_update=%llu pending_target_kib=%llu",
-			     sample->uuid, reading->actual, reading->unused, reading->updated,
-			     sample->last_update, sample->pending_target);
-		if (!reading->have_actual || !reading->have_unused || reading->actual == 0 ||
-		    reading->unused > reading->actual || reading->updated == 0 ||
-		    reading->maximum == 0)
-		{
-			memory_debug(snapshot->debug,
-				     "%s: skipping missing/invalid stats: has_actual=%d has_unused=%d "
-				     "has_last_update=%d max_kib=%llu", sample->uuid,
-				     reading->have_actual, reading->have_unused,
-				     reading->have_updated, reading->maximum);
-			continue;
-		}
-		if (reading->updated <= sample->last_update)
-		{
-			memory_debug(snapshot->debug, "%s: skipping stale stats", sample->uuid);
-			continue;
-		}
-		sample->last_update = reading->updated;
-		sample->unused = reading->unused;
-		sample->maximum = MIN(reading->maximum, GUEST_MAX_KIB);
-
-		// Balloon changes are asynchronous; don't stack requests on old samples.
-		if (sample->pending_target != 0)
-		{
-			if (sample->actual != sample->pending_target)
-			{
-				memory_debug(snapshot->debug,
-					     "%s: waiting for pending target_kib=%llu; observed actual_kib=%llu",
-					     sample->uuid, sample->pending_target, sample->actual);
-				continue;
-			}
-			memory_debug(snapshot->debug, "%s: completed pending target_kib=%llu",
-				     sample->uuid, sample->pending_target);
-			sample->pending_target = 0;
-		}
-		sample->usable = 1;
-	}
-
-	qsort(snapshot->samples, snapshot->ndomains, sizeof(*snapshot->samples),
-	      compare_unused_memory);
-	for (int d = 0; d < snapshot->ndomains; d++)
-	{
-		MemorySample *sample = &snapshot->samples[d];
-		if (!sample->usable || sample->unused <= RECLAIM_ABOVE_KIB)
-			continue;
-		unsigned long long amount = MIN(MEMORY_STEP_KIB,
-						sample->unused - GUEST_MIN_UNUSED_KIB);
-		unsigned long target = sample->actual - amount;
-		if (target == sample->actual || sample->pending_target != 0)
-			continue;
-		(*actions)[*action_count] = (MemoryAction){d, target, 0};
-		(*action_count)++;
-	}
-
-	// Only measured host memory is spendable; planned reclamation adds no credit.
-	unsigned long long budget = snapshot->host_free_kib > HOST_RESERVE_KIB ?
-		snapshot->host_free_kib - HOST_RESERVE_KIB : 0;
-	for (int d = 0; d < snapshot->ndomains; d++)
-		if (snapshot->samples[d].pending_target > snapshot->samples[d].actual)
-			budget -= MIN(budget, snapshot->samples[d].pending_target -
-					    snapshot->samples[d].actual);
-	memory_debug(snapshot->debug, "host free_kib=%llu reserve_kib=%lu grant_budget_kib=%llu "
-		     "after pending growth reservations",
-		     snapshot->host_free_kib, HOST_RESERVE_KIB, budget);
-
-	for (int d = 0; d < snapshot->ndomains && budget > 0; d++)
-	{
-		MemorySample *sample = &snapshot->samples[d];
-		if (!sample->usable || sample->pending_target != 0 ||
-		    sample->unused >= GROW_BELOW_KIB || sample->actual >= sample->maximum)
-		{
-			if (sample->usable && sample->unused < GROW_BELOW_KIB &&
-			    sample->actual >= sample->maximum)
-				memory_debug(snapshot->debug,
-					     "%s: at allocation ceiling actual_kib=%llu maximum_kib=%llu",
-					     sample->uuid, sample->actual, sample->maximum);
-			continue;
-		}
-		unsigned long long amount = MIN(MEMORY_STEP_KIB,
-						sample->maximum - sample->actual);
-		amount = MIN(amount, budget);
-		// Round down to a 4 KiB page so an asynchronous target can be observed exactly.
-		amount -= amount % 4;
-		if (amount == 0)
-		{
-			memory_debug(snapshot->debug,
-				     "%s: grant below one page; remaining_budget_kib=%llu",
-				     sample->uuid, budget);
-			continue;
-		}
-		unsigned long target = sample->actual + amount;
-		if (target == sample->actual || sample->pending_target != 0)
-			continue;
-		(*actions)[*action_count] = (MemoryAction){d, target, 1};
-		(*action_count)++;
-		budget -= amount;
-	}
-	memory_debug(snapshot->debug, "host planned_remaining_budget_kib=%llu", budget);
-	return 0;
+    for (size_t record_index = 0; record_index < map->count; ++record_index) {
+        if (map->records[record_index].domain_handle != NULL)
+            virDomainFree(map->records[record_index].domain_handle);
+    }
+    free(map->records);
+    *map = (VmMap){0};
 }
 
-/* Record a pending target only when libvirt accepts the planned request. */
-static void apply_memory_actions(MemorySnapshot *snapshot,
-				  const MemoryAction *actions, int action_count)
+static void cleanup_memory_plan(MemoryPlan *plan)
 {
-	for (int a = 0; a < action_count; a++)
-	{
-		const MemoryAction *action = &actions[a];
-		MemorySample *sample = &snapshot->samples[action->sample_index];
-		if (action->target == sample->actual || sample->pending_target != 0)
-			continue;
-		int result = virDomainSetMemory(snapshot->domains[sample->domain_index],
-						action->target);
-		memory_debug(snapshot->debug, "%s: %s actual_kib=%llu target_kib=%lu result=%d",
-			     sample->uuid, action->grow ? "grow" : "reclaim",
-			     sample->actual, action->target, result);
-		if (result == 0)
-			sample->pending_target = action->target;
-		else if (action->grow)
-			fprintf(stderr, "Could not give memory to %s\n", sample->uuid);
-		else
-			fprintf(stderr, "Could not reclaim memory from %s\n", sample->uuid);
-	}
+    free(plan->targets);
+    *plan = (MemoryPlan){0};
 }
 
-/* Reclaim spare memory first, then give small increments to the hungriest VMs. */
-void MemoryScheduler(virConnectPtr conn, int interval)
+static void cleanup_memory_scheduler(MemorySchedulerState *state)
 {
-	static MemorySample *previous = NULL;
-	static int previous_count = 0;
-	const char *debug_env = getenv("MEMORY_DEBUG");
-	MemorySnapshot snapshot = {.debug = debug_env != NULL && !strcmp(debug_env, "1")};
-	MemoryAction *actions = NULL;
-	int action_count = 0;
+    cleanup_vm_map(&state->history);
+    state->initialized = false;
+}
 
-	if (interval <= 0)
-		return;
-	int status = read_memory_snapshot(conn, interval, previous, previous_count, &snapshot);
-	if (status == 0)
-	{
-		free(previous);
-		previous = NULL;
-		previous_count = 0;
-	}
-	if (status > 0 && plan_memory_actions(&snapshot, &actions, &action_count) == 0)
-	{
-		apply_memory_actions(&snapshot, actions, action_count);
-		free(previous);
-		previous = snapshot.samples;
-		previous_count = snapshot.ndomains;
-		snapshot.samples = NULL;
-	}
+static const VmRecord *find_vm_by_id(const VmMap *map, unsigned int domain_id)
+{
+    for (size_t record_index = 0; record_index < map->count; ++record_index) {
+        if (map->records[record_index].domain_id == domain_id)
+            return &map->records[record_index];
+    }
+    return NULL;
+}
 
-	free(actions);
-	free(snapshot.readings);
-	free(snapshot.samples);
-	for (int d = 0; d < snapshot.ndomains; d++)
-		virDomainFree(snapshot.domains[d]);
-	free(snapshot.domains);
+static bool identify_vm(VmRecord *record, virDomainPtr domain,
+                        const VmMap *history)
+{
+    record->domain_id = virDomainGetID(domain);
+    if (record->domain_id == UINT_MAX ||
+        virDomainGetUUIDString(domain, record->uuid) < 0)
+        return false;
+
+    const VmRecord *previous = find_vm_by_id(history, record->domain_id);
+    if (previous != NULL && strcmp(previous->uuid, record->uuid) == 0)
+        record->memory = previous->memory;
+    return true;
+}
+
+static bool enable_memory_statistics(VmRecord *record, int interval)
+{
+    if (record->memory.statistics_enabled)
+        return true;
+    if (virDomainSetMemoryStatsPeriod(record->domain_handle, interval,
+                                      VIR_DOMAIN_AFFECT_LIVE) < 0)
+        return false;
+    record->memory.statistics_enabled = true;
+    return true;
+}
+
+static MemoryReading parse_memory_statistics(
+    const virDomainMemoryStatStruct *statistics, int statistic_count)
+{
+    MemoryReading reading = {0};
+    for (int statistic_index = 0; statistic_index < statistic_count;
+         ++statistic_index) {
+        switch (statistics[statistic_index].tag) {
+        case VIR_DOMAIN_MEMORY_STAT_ACTUAL_BALLOON:
+            reading.actual_kib = statistics[statistic_index].val;
+            reading.has_actual = true;
+            break;
+        case VIR_DOMAIN_MEMORY_STAT_UNUSED:
+            reading.unused_kib = statistics[statistic_index].val;
+            reading.has_unused = true;
+            break;
+        case VIR_DOMAIN_MEMORY_STAT_LAST_UPDATE:
+            reading.update = statistics[statistic_index].val;
+            reading.has_update = true;
+            break;
+        default:
+            break;
+        }
+    }
+    return reading;
+}
+
+static void update_vm_memory(VmMemoryState *memory,
+                             const MemoryReading *reading,
+                             unsigned long maximum_kib)
+{
+    if (reading->has_actual)
+        memory->actual_kib = reading->actual_kib;
+    if (!reading->has_actual || !reading->has_unused || !reading->has_update ||
+        reading->actual_kib == 0 ||
+        reading->unused_kib > reading->actual_kib ||
+        maximum_kib == 0 || reading->update == 0 ||
+        reading->update <= memory->last_update)
+        return;
+
+    memory->last_update = reading->update;
+    memory->unused_kib = reading->unused_kib;
+    memory->maximum_kib = smaller_value(maximum_kib, GUEST_MAX_KIB);
+    if (memory->pending_target_kib != 0) {
+        if (memory->actual_kib != memory->pending_target_kib)
+            return;
+        memory->pending_target_kib = 0;
+    }
+    memory->fresh = true;
+}
+
+static void read_memory_statistics(VmRecord *record)
+{
+    virDomainInfo domain_info;
+    virDomainMemoryStatStruct statistics[VIR_DOMAIN_MEMORY_STAT_NR];
+    if (virDomainGetInfo(record->domain_handle, &domain_info) < 0)
+        return;
+    int statistic_count = virDomainMemoryStats(record->domain_handle, statistics,
+                                                VIR_DOMAIN_MEMORY_STAT_NR, 0);
+    if (statistic_count < 0)
+        return;
+    MemoryReading reading = parse_memory_statistics(statistics, statistic_count);
+    update_vm_memory(&record->memory, &reading, domain_info.maxMem);
+}
+
+static bool allocate_vm_map(VmMap *snapshot, virDomainPtr **domains,
+                            virConnectPtr connection)
+{
+    int domain_count = virConnectListAllDomains(connection, domains,
+                                                VIR_CONNECT_LIST_DOMAINS_ACTIVE);
+    if (domain_count < 0)
+        return false;
+    snapshot->count = (size_t)domain_count;
+    if (snapshot->count == 0)
+        return true;
+    snapshot->records = calloc(snapshot->count, sizeof(*snapshot->records));
+    if (snapshot->records != NULL)
+        return true;
+
+    for (int domain_index = 0; domain_index < domain_count; ++domain_index)
+        virDomainFree((*domains)[domain_index]);
+    free(*domains);
+    *domains = NULL;
+    snapshot->count = 0;
+    return false;
+}
+
+/* Collect one complete observation. An identity failure aborts the pass so
+ * pending grants are still reserved when the next pass is planned. */
+static bool read_vm_records(VmMap *snapshot, virDomainPtr *domains,
+                            const VmMap *history, int interval)
+{
+    bool success = true;
+    for (size_t record_index = 0; record_index < snapshot->count;
+         ++record_index) {
+        VmRecord *record = &snapshot->records[record_index];
+        record->domain_handle = domains[record_index];
+        domains[record_index] = NULL;
+        if (!identify_vm(record, record->domain_handle, history)) {
+            success = false;
+            break;
+        }
+        record->memory.fresh = false;
+        if (enable_memory_statistics(record, interval))
+            read_memory_statistics(record);
+    }
+    for (size_t record_index = 0; record_index < snapshot->count; ++record_index) {
+        if (domains[record_index] != NULL)
+            virDomainFree(domains[record_index]);
+    }
+    return success;
+}
+
+static bool fetch_vm_states(virConnectPtr connection, int interval,
+                            const VmMap *history, VmMap *snapshot,
+                            unsigned long long *host_free_kib)
+{
+    virDomainPtr *domains = NULL;
+    if (!allocate_vm_map(snapshot, &domains, connection))
+        return false;
+    bool success = read_vm_records(snapshot, domains, history, interval);
+    free(domains);
+    if (success)
+        *host_free_kib = virNodeGetFreeMemory(connection) / 1024;
+    return success;
+}
+
+static bool target_exists(const MemoryPlan *plan, size_t record_index)
+{
+    for (size_t target_index = 0; target_index < plan->count; ++target_index) {
+        if (plan->targets[target_index].record_index == record_index)
+            return true;
+    }
+    return false;
+}
+
+static bool vm_can_change(const VmRecord *record, bool donor)
+{
+    const VmMemoryState *memory = &record->memory;
+    if (!memory->fresh || memory->pending_target_kib != 0)
+        return false;
+    if (donor)
+        return memory->unused_kib > RECLAIM_ABOVE_KIB;
+    return memory->unused_kib < GROW_BELOW_KIB &&
+           memory->actual_kib < memory->maximum_kib;
+}
+
+/* Repeated selection is clear and cheap for the small VM set. */
+static size_t select_next_vm(const VmMap *map, const MemoryPlan *plan,
+                             bool donor)
+{
+    size_t selected = map->count;
+    for (size_t record_index = 0; record_index < map->count; ++record_index) {
+        const VmRecord *candidate = &map->records[record_index];
+        if (!vm_can_change(candidate, donor) ||
+            target_exists(plan, record_index))
+            continue;
+        unsigned long long unused_kib = candidate->memory.unused_kib;
+        if (selected == map->count ||
+            (donor ? unused_kib > map->records[selected].memory.unused_kib
+                   : unused_kib < map->records[selected].memory.unused_kib))
+            selected = record_index;
+    }
+    return selected;
+}
+
+static void plan_reclamations(const VmMap *map, MemoryPlan *plan)
+{
+    for (size_t attempt = 0; attempt < map->count; ++attempt) {
+        size_t record_index = select_next_vm(map, plan, true);
+        if (record_index == map->count)
+            return;
+        const VmMemoryState *memory = &map->records[record_index].memory;
+        unsigned long long amount = smaller_value(MEMORY_STEP_KIB,
+                                  memory->unused_kib - GUEST_MIN_UNUSED_KIB);
+        amount = smaller_value(amount, memory->actual_kib);
+        amount -= amount % MEMORY_PAGE_KIB;
+        if (amount == 0)
+            return;
+        plan->targets[plan->count++] = (MemoryTarget){
+            .record_index = record_index,
+            .target_kib = (unsigned long)(memory->actual_kib - amount),
+            .grow = false
+        };
+    }
+}
+
+static unsigned long long available_grant_kib(const VmMap *map,
+                                               unsigned long long host_free_kib)
+{
+    unsigned long long budget = host_free_kib > HOST_RESERVE_KIB
+                                ? host_free_kib - HOST_RESERVE_KIB : 0;
+    for (size_t record_index = 0; record_index < map->count; ++record_index) {
+        const VmMemoryState *memory = &map->records[record_index].memory;
+        if (memory->pending_target_kib > memory->actual_kib) {
+            unsigned long long outstanding = memory->pending_target_kib -
+                                             memory->actual_kib;
+            budget -= smaller_value(budget, outstanding);
+        }
+    }
+    return budget;
+}
+
+static void plan_grants(const VmMap *map, unsigned long long budget,
+                        MemoryPlan *plan)
+{
+    for (size_t attempt = 0; attempt < map->count &&
+                             budget >= MEMORY_PAGE_KIB; ++attempt) {
+        size_t record_index = select_next_vm(map, plan, false);
+        if (record_index == map->count)
+            return;
+        const VmMemoryState *memory = &map->records[record_index].memory;
+        unsigned long long amount = smaller_value(MEMORY_STEP_KIB,
+                                 memory->maximum_kib - memory->actual_kib);
+        amount = smaller_value(amount, budget);
+        amount -= amount % MEMORY_PAGE_KIB;
+        if (amount == 0)
+            return;
+        plan->targets[plan->count++] = (MemoryTarget){
+            .record_index = record_index,
+            .target_kib = (unsigned long)(memory->actual_kib + amount),
+            .grow = true
+        };
+        budget -= amount;
+    }
+}
+
+/* The plan depends only on the supplied snapshot and host free memory.
+ * Reclamation is not spendable until the host reports that memory free. */
+static bool plan_target_memory(const VmMap *map,
+                               unsigned long long host_free_kib,
+                               MemoryPlan *plan)
+{
+    *plan = (MemoryPlan){0};
+    if (map->count == 0)
+        return true;
+    plan->targets = calloc(map->count, sizeof(*plan->targets));
+    if (plan->targets == NULL)
+        return false;
+    plan_reclamations(map, plan);
+    plan_grants(map, available_grant_kib(map, host_free_kib), plan);
+    return true;
+}
+
+static void apply_memory_targets(VmMap *map, const MemoryPlan *plan)
+{
+    for (size_t target_index = 0; target_index < plan->count; ++target_index) {
+        const MemoryTarget *target = &plan->targets[target_index];
+        VmRecord *record = &map->records[target->record_index];
+        if (virDomainSetMemory(record->domain_handle, target->target_kib) == 0)
+            record->memory.pending_target_kib = target->target_kib;
+        else
+            fprintf(stderr, "Could not %s memory for VM %s\n",
+                    target->grow ? "grant" : "reclaim", record->uuid);
+    }
+}
+
+static void save_vm_history(MemorySchedulerState *state, VmMap *snapshot)
+{
+    for (size_t record_index = 0; record_index < snapshot->count; ++record_index) {
+        virDomainFree(snapshot->records[record_index].domain_handle);
+        snapshot->records[record_index].domain_handle = NULL;
+    }
+    cleanup_vm_map(&state->history);
+    state->history = *snapshot;
+    *snapshot = (VmMap){0};
+}
+
+void MemoryScheduler(virConnectPtr connection, int interval)
+{
+    if (connection == NULL || interval <= 0)
+        return;
+    if (!scheduler_state.initialized)
+        initialize_memory_scheduler(&scheduler_state);
+
+    VmMap snapshot = {0};
+    MemoryPlan plan = {0};
+    unsigned long long host_free_kib = 0;
+    if (fetch_vm_states(connection, interval, &scheduler_state.history,
+                        &snapshot, &host_free_kib) &&
+        plan_target_memory(&snapshot, host_free_kib, &plan)) {
+        apply_memory_targets(&snapshot, &plan);
+        save_vm_history(&scheduler_state, &snapshot);
+    }
+    cleanup_memory_plan(&plan);
+    cleanup_vm_map(&snapshot);
+}
+
+static void signal_callback_handler(int signal_number)
+{
+    (void)signal_number;
+    is_exit = 1;
+}
+
+static bool parse_interval(const char *argument, int *interval)
+{
+    char *end = NULL;
+    long parsed = strtol(argument, &end, 10);
+    if (argument == end || *end != '\0' || parsed <= 0 || parsed > INT_MAX)
+        return false;
+    *interval = (int)parsed;
+    return true;
+}
+
+int main(int argument_count, char *arguments[])
+{
+    int interval;
+    if (argument_count != 2 || !parse_interval(arguments[1], &interval)) {
+        fprintf(stderr, "Usage: %s <positive interval in seconds>\n", arguments[0]);
+        return EXIT_FAILURE;
+    }
+    virConnectPtr connection = open_hypervisor_connection();
+    if (connection == NULL)
+        return EXIT_FAILURE;
+
+    initialize_memory_scheduler(&scheduler_state);
+    signal(SIGINT, signal_callback_handler);
+    while (!is_exit) {
+        MemoryScheduler(connection, interval);
+        sleep((unsigned int)interval);
+    }
+    cleanup_memory_scheduler(&scheduler_state);
+    virConnectClose(connection);
+    return EXIT_SUCCESS;
 }

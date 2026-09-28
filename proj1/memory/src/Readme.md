@@ -1,45 +1,66 @@
-# Memory Coordinator
+# Memory coordinator
 
-Build with `make` in this directory. Run `./memory_coordinator 2` to sample every
-two seconds.
+Build with `make` in this directory, then run `./memory_coordinator 2` to
+schedule every two seconds. The program connects to `qemu:///system` once.
 
-## General idea
+## Program flow
 
-The coordinator checks each guest's unused memory and the host's free memory.
-It plans small reductions for guests with plenty of unused memory, then plans
-growth for the hungriest guests within the available host budget. The gap
-between the growth and reduction thresholds avoids rapid back-and-forth
-changes. Balloon changes take effect asynchronously.
+Each scheduler pass follows these functions:
 
-## Where the stages are
+1. `fetch_vm_states` lists active VMs and reads their current balloon size,
+   unused memory, configured limit, and statistics timestamp. A small
+   `VmMap` maps each libvirt domain ID to a `VmRecord`; its UUID check
+   prevents a reused ID from inheriting an old VM's state. The
+   `VmMemoryState` substructure holds the measurements and pending request.
+2. `plan_target_memory` receives the complete snapshot and host free memory.
+   It calculates ordered target sizes without calling libvirt or changing the
+   input. Its result is a `MemoryPlan`.
+3. `apply_memory_targets` sends each target through `virDomainSetMemory`.
+   Accepted requests remain pending until a newer sample reports that target.
+4. `save_vm_history` retains the state needed for the next pass.
+   `cleanup_memory_plan`, `cleanup_vm_map`, and
+   `cleanup_memory_scheduler` release allocated memory and libvirt handles.
 
-| Stage | Code | Purpose |
-| --- | --- | --- |
-| Read | [read_memory_snapshot](./memory_coordinator.c#L134) | Fetch guest balloon statistics, limits, and host free memory from libvirt. |
-| Decide | [plan_memory_actions](./memory_coordinator.c#L231) | Choose ordered guest targets within the reserves and shared budget. |
-| Apply | [apply_memory_actions](./memory_coordinator.c#L351) | Send targets to libvirt and record successful requests. |
+`initialize_memory_scheduler` sets the initial state, while
+`open_hypervisor_connection` contains the one-time libvirt connection.
 
-[MemoryScheduler](./memory_coordinator.c#L375) runs the stages and saves
-history for the next call.
+## Greedy policy
 
-## Edge cases
+The planner first chooses donors in descending order of unused memory. A VM
+with more than 300 MiB unused gives back at most 100 MiB, leaving at least
+100 MiB unused. It then chooses recipients in ascending order of unused
+memory. A VM with less than 200 MiB unused can gain at most 100 MiB, bounded
+by its configured maximum, the 2048 MiB project cap, and the shared host
+budget. The budget is measured host free memory minus the 200 MiB host
+reserve and any outstanding grants. Grants are rounded down to 4 KiB.
+Reclaimed memory enters the budget only when the host reports it free on a
+later pass.
 
-- Missing or unchanged statistics do not trigger an adjustment.
-- A pending balloon request blocks another change for that guest until a
-  fresh sample reports the requested allocation.
-- A failed request can be retried on a later fresh sample. Grant targets stay
-  fixed for the current cycle, so a failed grant's budget is reconsidered next
-  cycle. Planned reductions are not spendable until the host reports the
-  memory free.
+The 200/300 MiB gap avoids switching a VM back and forth when its unused
+memory fluctuates near a threshold. Missing, invalid, or unchanged guest
+statistics produce no action. Failed libvirt requests can be retried after
+new statistics arrive. A still-pending request blocks another request to
+the same VM.
 
-## Settings to adjust
+This is a deliberately small greedy adaptation of the ideas in Carl
+Waldspurger's [*Memory Resource Management in VMware ESX Server*](https://usenix.org/legacy/events/osdi02/tech/waldspurger/waldspurger_html/esx-mem-html.html)
+(OSDI 2002). Its [idle-memory reclamation section](https://usenix.org/legacy/events/osdi02/tech/waldspurger/waldspurger_html/node14.html)
+describes preferentially reclaiming memory from idle VMs; its
+[dynamic reallocation section](https://usenix.org/legacy/events/osdi02/tech/waldspurger/waldspurger_html/node20.html)
+describes periodic rebalancing and hysteresis. For this assignment, the
+policy replaces ESX's shares, idle-memory tax, and multiple host-pressure
+states with unused-memory ordering, fixed thresholds, one-step changes,
+and assignment-specific safety limits. The
+assignment's [memory requirements](../../README.md#key-considerations)
+set the 100 MiB guest reserve, 200 MiB host reserve, and gradual changes.
 
-The [memory constants](./memory_coordinator.c#L63) set the step size, growth
-and reduction thresholds, guest and host reserves, and the guest allocation
-cap. They use KiB; 1024 KiB is 1 MiB. The planner also rounds growth down to
-[4 KiB pages](./memory_coordinator.c#L331). The sampling interval is the
-command-line argument. Update the related assertions in
-[memory tests](../../tests/memory_test.c) if these values change.
+Libvirt's [domain API](https://libvirt.org/html/libvirt-libvirt-domain.html)
+defines the balloon statistics and target-memory calls. Its
+[host API](https://libvirt.org/html/libvirt-libvirt-host.html#virNodeGetFreeMemory)
+reports free host memory in bytes, so the coordinator converts it to KiB.
 
-Run the mock tests with `make -C ../../tests check`. For diagnostic output, use
-`MEMORY_DEBUG=1 ./memory_coordinator 2`.
+## Verification
+
+`make -C ../../tests .build/memory_test && ../../tests/.build/memory_test`
+runs the mock scheduler scenarios. Live use also needs libvirt development
+headers, a running hypervisor, and guests with working balloon statistics.
