@@ -47,6 +47,9 @@ VM, and a target equal to the observed allocation is never sent.
 Set `MEMORY_DEBUG=1` to see sampled sizes, host grant budget, and reasons
 that a VM cannot grow. Statistics are read even if enabling their collection
 period fails, since another process may already have enabled collection.
+Libvirt call failures are always written to stderr with the call name, VM UUID
+when known, and libvirt's error message. Empty memory statistics and a zero
+host-free-memory result are also reported.
 
 This is a deliberately small greedy adaptation of the ideas in Carl
 Waldspurger's [*Memory Resource Management in VMware ESX Server*](https://usenix.org/legacy/events/osdi02/tech/waldspurger/waldspurger_html/esx-mem-html.html)

@@ -6,6 +6,7 @@
 #include <string.h>
 #include <time.h>
 #include "libvirt/libvirt.h"
+#include "libvirt/virterror.h"
 #define KIB (1024ULL)
 struct FakeDomain {
     char uuid[VIR_UUID_STRING_BUFLEN]; unsigned int id; int nv;
@@ -81,6 +82,8 @@ void settle_memory(void) {
     }
 }
 virConnectPtr virConnectOpen(const char *uri) { return (void *)1; }
+virErrorPtr virGetLastError(void) { return NULL; }
+void virResetLastError(void) { }
 int virConnectClose(virConnectPtr conn) { return 0; }
 int virConnectListAllDomains(virConnectPtr conn, virDomainPtr **domains, unsigned int flags) {
     *domains = calloc(guest_count + 1, sizeof(**domains));

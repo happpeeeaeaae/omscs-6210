@@ -1,4 +1,5 @@
 #include <libvirt/libvirt.h>
+#include <libvirt/virterror.h>
 
 #include <limits.h>
 #include <signal.h>
@@ -106,17 +107,39 @@ static void memory_debug(const char *format, ...) {
     va_end(arguments);
 }
 
+static void log_libvirt_failure(const char *call_name, const char *vm_uuid,
+                                unsigned long long requested_kib) {
+    virErrorPtr error = virGetLastError();
+    const char *error_message = error != NULL && error->message != NULL ?
+                                error->message : "no libvirt error detail available";
+    const char *vm_prefix = vm_uuid != NULL ? " for VM " : "";
+    const char *vm_identifier = vm_uuid != NULL ? vm_uuid : "";
+
+    if (requested_kib != 0) {
+        fprintf(stderr, "[memory] %s failed%s%s (target=%llu KiB): %s\n",
+                call_name, vm_prefix, vm_identifier, requested_kib, error_message);
+    } else {
+        fprintf(stderr, "[memory] %s failed%s%s: %s\n",
+                call_name, vm_prefix, vm_identifier, error_message);
+    }
+}
+
 static virConnectPtr open_hypervisor_connection(void) {
     virConnectPtr connection = virConnectOpen("qemu:///system");
-    if (connection == NULL)
-        fprintf(stderr, "Failed to open libvirt connection\n");
+    if (connection == NULL) {
+        log_libvirt_failure("virConnectOpen", NULL, 0);
+    }
     return connection;
 }
 
 static void cleanup_vm_map(VmMap *map) {
     for (size_t record_index = 0; record_index < map->count; ++record_index) {
         if (map->records[record_index].domain_handle != NULL) {
-            virDomainFree(map->records[record_index].domain_handle);
+            if (virDomainFree(map->records[record_index].domain_handle) < 0) {
+                const char *vm_uuid = map->records[record_index].uuid[0] != '\0' ?
+                                      map->records[record_index].uuid : NULL;
+                log_libvirt_failure("virDomainFree", vm_uuid, 0);
+            }
         }
     }
 
@@ -148,7 +171,13 @@ static const VmRecord *find_vm_by_id(const VmMap *map, unsigned int domain_id) {
 static bool identify_vm(VmRecord *record, virDomainPtr domain, const VmMap *history) {
     record->domain_id = virDomainGetID(domain);
 
-    if (record->domain_id == UINT_MAX ||virDomainGetUUIDString(domain, record->uuid) < 0) {
+    if (record->domain_id == UINT_MAX) {
+        log_libvirt_failure("virDomainGetID", NULL, 0);
+        return false;
+    }
+
+    if (virDomainGetUUIDString(domain, record->uuid) < 0) {
+        log_libvirt_failure("virDomainGetUUIDString", NULL, 0);
         return false;
     }
 
@@ -167,7 +196,7 @@ static bool enable_memory_statistics(VmRecord *record, int interval) {
     }
 
     if (virDomainSetMemoryStatsPeriod(record->domain_handle, interval, VIR_DOMAIN_AFFECT_LIVE) < 0) {
-        memory_debug("%s: could not enable balloon statistics", record->uuid);
+        log_libvirt_failure("virDomainSetMemoryStatsPeriod", record->uuid, 0);
         return false;
     }
 
@@ -246,15 +275,20 @@ static void read_memory_statistics(VmRecord *record) {
     virDomainMemoryStatStruct statistics[VIR_DOMAIN_MEMORY_STAT_NR];
 
     if (virDomainGetInfo(record->domain_handle, &domain_info) < 0) {
-        memory_debug("%s: could not read domain info", record->uuid);
+        log_libvirt_failure("virDomainGetInfo", record->uuid, 0);
         return;
     }
 
     int statistic_count = virDomainMemoryStats(record->domain_handle, statistics, VIR_DOMAIN_MEMORY_STAT_NR, 0);
 
     if (statistic_count < 0) {
-        memory_debug("%s: could not read balloon statistics", record->uuid);
+        log_libvirt_failure("virDomainMemoryStats", record->uuid, 0);
         return;
+    }
+
+    if (statistic_count == 0) {
+        fprintf(stderr, "[memory] virDomainMemoryStats returned no statistics for VM %s\n",
+                record->uuid);
     }
 
     MemoryReading reading = parse_memory_statistics(statistics, statistic_count);
@@ -275,7 +309,7 @@ static void read_memory_statistics(VmRecord *record) {
 static bool allocate_vm_map(VmMap *snapshot, virDomainPtr **domains, virConnectPtr connection) {
     int domain_count = virConnectListAllDomains(connection, domains, VIR_CONNECT_LIST_DOMAINS_ACTIVE);
     if (domain_count < 0) {
-        memory_debug("could not list active VMs");
+        log_libvirt_failure("virConnectListAllDomains", NULL, 0);
         return false;
     }
 
@@ -291,7 +325,9 @@ static bool allocate_vm_map(VmMap *snapshot, virDomainPtr **domains, virConnectP
     }
 
     for (int domain_index = 0; domain_index < domain_count; ++domain_index) {
-        virDomainFree((*domains)[domain_index]);
+        if (virDomainFree((*domains)[domain_index]) < 0) {
+            log_libvirt_failure("virDomainFree", NULL, 0);
+        }
     }
 
     free(*domains);
@@ -321,8 +357,9 @@ static bool read_vm_records(VmMap *snapshot, virDomainPtr *domains, const VmMap 
     }
 
     for (size_t record_index = 0; record_index < snapshot->count; ++record_index) {
-        if (domains[record_index] != NULL)
-            virDomainFree(domains[record_index]);
+        if (domains[record_index] != NULL && virDomainFree(domains[record_index]) < 0) {
+            log_libvirt_failure("virDomainFree", NULL, 0);
+        }
     }
 
     return success;
@@ -340,7 +377,16 @@ static bool fetch_vm_states(virConnectPtr connection, int interval, const VmMap 
     free(domains);
 
     if (success) {
-        *host_free_kib = virNodeGetFreeMemory(connection) / 1024;
+        virResetLastError();
+        unsigned long long host_free_bytes = virNodeGetFreeMemory(connection);
+        if (host_free_bytes == 0) {
+            if (virGetLastError() != NULL) {
+                log_libvirt_failure("virNodeGetFreeMemory", NULL, 0);
+            } else {
+                fputs("[memory] virNodeGetFreeMemory returned 0 bytes of free host memory\n", stderr);
+            }
+        }
+        *host_free_kib = host_free_bytes / 1024;
     }
 
     return success;
@@ -500,15 +546,16 @@ static void apply_memory_targets(VmMap *map, const MemoryPlan *plan) {
         } else {
             record->memory.has_failed_request = true;
             record->memory.last_failed_pass = map->pass_number;
-            fprintf(stderr, "Could not %s memory for VM %s\n",
-                    target->grow ? "grant" : "reclaim", record->uuid);
+            log_libvirt_failure("virDomainSetMemory", record->uuid, target->target_kib);
         }
     }
 }
 
 static void save_vm_history(MemorySchedulerState *state, VmMap *snapshot) {
     for (size_t record_index = 0; record_index < snapshot->count; ++record_index) {
-        virDomainFree(snapshot->records[record_index].domain_handle);
+        if (virDomainFree(snapshot->records[record_index].domain_handle) < 0) {
+            log_libvirt_failure("virDomainFree", snapshot->records[record_index].uuid, 0);
+        }
         snapshot->records[record_index].domain_handle = NULL;
     }
 
@@ -605,7 +652,9 @@ int main(int argument_count, char *arguments[]) {
     }
 
     cleanup_memory_scheduler(&scheduler_state);
-    virConnectClose(connection);
+    if (virConnectClose(connection) < 0) {
+        log_libvirt_failure("virConnectClose", NULL, 0);
+    }
 
     return EXIT_SUCCESS;
 }

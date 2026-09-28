@@ -1,7 +1,7 @@
 CC ?= cc
 CPPFLAGS += -Imock_libvirt
 CFLAGS := -std=gnu11 -g -Wall -Werror $(CFLAGS)
-COMMON = mock.h mock_libvirt/libvirt/libvirt.h
+COMMON = mock.h mock_libvirt/libvirt/libvirt.h mock_libvirt/libvirt/virterror.h
 SANITIZERS = -fsanitize=address,undefined -fno-omit-frame-pointer
 
 .PHONY: check sanitize
