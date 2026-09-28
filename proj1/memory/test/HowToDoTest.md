@@ -183,7 +183,7 @@ Memory (VM: aos_vm1)  Actual [421.0], Unused: [100.58984375]
 - The names of these VMs **MUST** start with *aos_* (e.g., aos_vm1 for the first VM, aos_vm2 for the second VM, etc.).
 - Note that if you have already created VMs as part of the CPU Scheduler tests, you can re-use 4 those VMs here but will need to delete the other 4. Otherwise, if you are starting with this portion of the assignment you will be creating 4 VMs here and another 4 VMs when you begin the CPU Scheduler portion.
 - If you need to delete VMs, you can do so with the command: `uvt-kvm destroy aos_vm1` (where 'aos_vm1' is the name of the VM you wish to destroy).
-- If you need to create VMs, you can do so with the command: `uvt-kvm create aos_vm1 release=bionic --memory 512` (where 'aos_vm1' is the name of the VM you wish to create).
+- If you need to create VMs, you canmemory_coordinator1.log do so with the command: `uvt-kvm create aos_vm1 release=bionic --memory 512` (where 'aos_vm1' is the name of the VM you wish to create).
 - Ensure the VMs are shutdown before starting. You can do this with the script `~/project1/shutdownallvm.py`.
 - Compile the test programs for the evaluations with the following commands:
 
