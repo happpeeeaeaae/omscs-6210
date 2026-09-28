@@ -1,0 +1,8 @@
+# The parent repository ignores every Makefile, but these are project inputs.
+!/cpu/src/Makefile
+!/memory/src/Makefile
+!/tests/Makefile
+
+# Local compiler output.
+/cpu/src/vcpu_scheduler
+/memory/src/memory_coordinator
