@@ -15,28 +15,31 @@ void check_counts(int each) {
 
 void test_cpu_plan_actions(void) {
     reset(2, 2, 1);
-    CpuSample samples[2], previous[2];
-    memset(samples, 0, sizeof(samples));
-    memset(previous, 0, sizeof(previous));
+    CpuVmState current_vms[2] = {0}, previous_vms[2] = {0};
+    CpuVcpuState current_vcpus[2] = {0}, previous_vcpus[2] = {0};
+    int online_cpus[2] = {0, 1};
     for (int d = 0; d < 2; d++) {
-        strcpy(samples[d].uuid, guests[d].uuid);
-        samples[d].domain_id = guests[d].id;
-        samples[d].domain_index = d;
-        samples[d].vcpu = 0;
-        samples[d].current_cpu = 0;
-        samples[d].cpu_time = 1000000000ULL;
-        previous[d] = samples[d];
-        previous[d].cpu_time = 0;
+        strcpy(current_vms[d].uuid, guests[d].uuid);
+        current_vms[d].domain_id = guests[d].id;
+        current_vms[d].vcpu_count = 1;
+        current_vms[d].vcpus = &current_vcpus[d];
+        current_vcpus[d].cpu_time_ns = 1000000000ULL;
+        current_vcpus[d].current_cpu = 0;
+        current_vcpus[d].has_single_online_pin = true;
+        previous_vms[d] = current_vms[d];
+        previous_vms[d].vcpus = &previous_vcpus[d];
     }
-    CpuSnapshot snapshot = {.samples = samples, .count = 2, .online = host_online,
-                            .ncpus = 2, .nonline = 2, .sample_time = 2.0};
-    CpuAction *actions = NULL;
-    int count = 0;
-    assert(plan_cpu_actions(&snapshot, previous, 2, 0.0, &actions, &count) == 0);
-    assert(pins == 0 && count == 1);
-    assert(actions[0].target_cpu == 1);
-    assert(!strcmp(samples[actions[0].sample_index].uuid, guests[1].uuid));
-    free(actions);
+    CpuSnapshot current = {.vms = current_vms, .vm_count = 2,
+                           .online_cpus = online_cpus, .online_cpu_count = 2,
+                           .sampled_at = {.tv_sec = 2}};
+    CpuSnapshot previous = {.vms = previous_vms, .vm_count = 2,
+                            .sampled_at = {.tv_sec = 0}};
+    CpuPlan plan = {0};
+    assert(plan_cpu_pins(&current, &previous, &plan) == 1);
+    assert(pins == 0 && plan.target_count == 2 && plan.change_count == 1);
+    assert(plan.changes[0].target_cpu == 1);
+    assert(!strcmp(plan.changes[0].uuid, guests[1].uuid));
+    release_plan(&plan);
     puts("CPU: pure plan identifies the vCPU to move and its target pCPU");
 }
 
@@ -137,7 +140,7 @@ int main(void) {
     guests[1].fail_pin = guests[3].fail_pin = 0; tick(2); run(); check_counts(2);
     puts("CPU: failed pin requests retried from observed affinities");
 
-    reset(4, 2, 1); run(); tick(2); guests[0].id++; run(); assert(pins == 0);
+    reset(4, 2, 1); run(); tick(2); guests[0].id += 1000; run(); assert(pins == 0);
     tick(2); run(); check_counts(2);
     before = pins; tick(2); guests[0].v[0].cpuTime = 0; run(); assert(pins == before);
     tick(2); run();
