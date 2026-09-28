@@ -1,27 +1,84 @@
 # vCPU scheduler
 
-Build with `make` in this directory and run `./vcpu_scheduler <positive interval>`.
-The required scaffold opens `qemu:///system`, calls `CPUScheduler` at that interval,
-and closes the connection after SIGINT.
+The scheduler samples active guests every interval and pins their vCPUs to online
+host pCPUs. Its goal is to balance measured CPU use while keeping an acceptable
+mapping stable. Build in this directory with `make`, then run, for example,
+`./vcpu_scheduler 2`. The supplied `main` opens `qemu:///system`, calls
+`CPUScheduler()` repeatedly, and closes the connection after Ctrl-C. Building
+for a live host requires libvirt development headers and libraries.
 
-## Greedy scheduling rule
+## One interval: where the decisions live
 
-The scheduler uses [Graham's Longest Processing Time first (LPT) rule](https://fanchung.ucsd.edu/ron/papers/69_02_multiprocessing.pdf): order jobs by decreasing size, then assign each job to the least loaded processor. Each vCPU is a job, each online pCPU is a processor, and the vCPU's recent CPU use is its estimated size. UUID and vCPU number break job-order ties. For equal planned pCPU loads, the current pCPU is preferred, followed by the pCPU with fewer assigned vCPUs and then the lowest pCPU ID.
+1. `read_cpu_snapshot` obtains the online pCPU IDs with `virNodeGetCPUMap` and
+   lists active domains. For each vCPU, `read_vm_state` copies its cumulative
+   CPU time and affinity mask from `virDomainGetVcpus`. A mask containing exactly
+   one online pCPU is a valid pin. Otherwise, the scheduler uses the vCPU's
+   current running pCPU (or the first online pCPU) as a temporary placement and
+   marks its affinity for repair.
+2. `plan_cpu_pins` compares this complete snapshot with the previous one. For
+   each matching domain UUID and vCPU number, `collect_cpu_work` computes
+   `usage % = 100 × (CPU time now − CPU time before) / elapsed nanoseconds`.
+   CPU time and elapsed time are both in nanoseconds; elapsed time comes from a
+   monotonic clock. Summing the vCPU percentages assigned to each pCPU gives
+   the estimated current pCPU loads.
+3. `plan_cpu_pins` measures balance with the population standard deviation of
+   those loads. If it is at most **5 percentage points**, the scheduler keeps
+   the current placement. Otherwise, `assign_greedily` sorts vCPUs by decreasing
+   measured use and assigns each to the least loaded online pCPU. Equal vCPU
+   uses are ordered by UUID and vCPU number. For equal planned pCPU loads, the
+   current pCPU wins, then the pCPU with fewer assigned vCPUs, then the lowest
+   pCPU ID. This is a periodic adaptation of
+   [Graham's longest processing time first rule](https://fanchung.ucsd.edu/ron/papers/69_02_multiprocessing.pdf).
+4. The proposed mapping is used only if its predicted standard deviation is at
+   least **1 percentage point** lower than the current value. `record_plan`
+   includes only pins that would change or whose existing affinity is not a
+   single online pCPU. Thus an already balanced mapping is left alone, while
+   an invalid or broad affinity mask can still be repaired.
+5. `apply_pin_changes` calls `virDomainPinVcpu` for those changes. It builds a
+   full host-sized affinity mask with just the target pCPU set. A failed call is
+   reported; the next interval reads the actual affinity again instead of
+   assuming that the request succeeded. `save_baseline` retains the current
+   sample, and `release_cycle` frees temporary domain handles and arrays.
 
-Classical LPT assumes fixed job sizes and has no migration cost. This scheduler samples again every interval and changes pins only when the new placement is predicted to reduce the standard deviation of pCPU loads by at least one percentage point. It leaves an already balanced placement alone when the deviation is at most five percentage points, except that it fixes an affinity mask that does not pin a vCPU to one online pCPU. These are the changes needed for periodic pinning and the assignment's stability goal. LPT's mathematical bound concerns completion time for fixed jobs; it does not guarantee the assignment's five point deviation for changing VM demand.
+For example, if four equally busy vCPUs are all pinned to pCPU 0, their
+estimated loads are concentrated on one pCPU. The greedy plan places one on
+each of four online pCPUs. Once the measured loads are within the 5-point
+balance threshold, later intervals preserve those pins.
 
-## Program flow
+## Edge cases and limits
 
-1. `initialize_scheduler_state` registers cleanup for the saved sample. The scaffold owns the libvirt connection.
-2. `read_cpu_snapshot` obtains the online pCPU IDs, active domains, each vCPU's cumulative CPU time, and its affinity mask. VM records are sorted by running domain ID for lookup. Each record also stores its UUID so a reused or changed ID cannot silently match a prior sample.
-3. `plan_cpu_pins` compares the complete snapshot with the preceding complete snapshot. It calculates each vCPU's utilization as `100 × CPU-time delta / monotonic elapsed time`, chooses a target for every vCPU, and returns the changed pins. This function makes no libvirt calls and does not mutate either input snapshot.
-4. `apply_pin_changes` calls `virDomainPinVcpu` only for changed or invalid pins. A failed request is reported; the next cycle reads actual affinity again before deciding what to do.
-5. `release_cycle` frees libvirt domain handles and all temporary data. The current complete snapshot becomes the next baseline; the registered cleanup frees that baseline on exit.
+- The first sample is a baseline, so it makes no balancing decision. A new VM,
+  a restart that changes its identity or resets its CPU counter, or nonpositive
+  elapsed time also starts a new baseline before redistributing. An incomplete
+  libvirt snapshot is discarded without replacing the last complete baseline.
+  No active VMs clears the baseline.
+- The scheduler uses counts and CPU IDs returned by libvirt. It handles more
+  vCPUs than pCPUs, fewer vCPUs than pCPUs, multiple vCPUs in one guest,
+  sparse online pCPU IDs, and affinity masks longer than one byte. Domain ID
+  lookup also checks UUID so a reused ID cannot inherit another guest's CPU
+  history.
+- A vCPU sharing a saturated pCPU may receive less CPU time than it wants.
+  The measured use can therefore understate demand, and rebalancing may need
+  several intervals. The greedy plan estimates balance; it does not guarantee
+  a 5-point result for every workload. It does not model host tasks, NUMA, or
+  migration costs beyond avoiding unnecessary pin changes.
 
-The first sample is only a baseline. A new or restarted VM, a counter reset, or nonpositive elapsed time also requires a fresh baseline before redistribution. Incomplete statistics abort the cycle without replacing the previous complete sample. An empty domain list clears the baseline. Counts and affinity mask sizes come from libvirt, so the code handles multiple vCPUs, sparse online pCPU IDs, and masks longer than one byte.
+## Evidence and how to reproduce it
 
-## Tests and limits
+From the project root, `make -C tests check` runs the real scheduler source
+against mocked libvirt calls. `make -C tests sanitize` runs the same cases with
+AddressSanitizer and UndefinedBehaviorSanitizer. Both commands passed locally.
+The cases cover the first sample, balanced pins, concentrated and changing
+workloads, failed pins, incomplete statistics, VM restarts, unusual pCPU
+counts, and multi-byte masks. In the mock simulations, the placement becomes
+balanced and then stops changing when demand is steady.
 
-Run `make -C ../../tests check` and `make -C ../../tests sanitize` from this directory for mocked libvirt tests. Follow `../test/HowToDoTest.md` for live VM tests. Measured vCPU use can understate demand when several busy vCPUs contend for one pCPU, so the greedy result may take several intervals to settle. This scheduler does not model NUMA, host processes, or cache migration cost.
-
-Libvirt API references: [domain and vCPU statistics and pinning](https://libvirt.org/html/libvirt-libvirt-domain.html), [online pCPU map](https://libvirt.org/html/libvirt-libvirt-host.html#virNodeGetCPUMap).
+The recorded [CPU test 2 log](../test/vcpu_scheduler2.log) shows a concentrated
+sample at iteration 8 (pCPU readings `102, 0, 0, 0`) and balanced readings at
+iteration 9 (`25, 25, 25, 25`); at iteration 25 the readings are
+`35, 35, 34, 34`. The [CPU test 3 log](../test/vcpu_scheduler3.log) shows a
+mixed workload changing from `49, 86, 87, 127` at iteration 7 to
+`41, 40, 40, 42` at iteration 8. These monitor readings illustrate the live
+behavior; the deterministic mock checks establish the specific decision rules.
+See [live test instructions](../test/HowToDoTest.md) for reproducing the VM
+runs.
