@@ -65,7 +65,7 @@ enum {
     MEMORY_PAGE_KIB = 4,
     MEMORY_STEP_KIB = 100 * 1024,
     GUEST_MIN_UNUSED_KIB = 100 * 1024,
-    GROW_BELOW_KIB = 200 * 1024,
+    GROW_AT_OR_BELOW_KIB = 150 * 1024,
     RECLAIM_ABOVE_KIB = 300 * 1024,
     HOST_RESERVE_KIB = 200 * 1024,
     GUEST_MAX_KIB = 2048 * 1024,
@@ -439,7 +439,7 @@ static bool vm_can_change(const VmRecord *record, bool donor, unsigned long long
         return memory->unused_kib > RECLAIM_ABOVE_KIB;
     }
 
-    return memory->unused_kib < GROW_BELOW_KIB && memory->actual_kib < memory->maximum_kib;
+    return memory->unused_kib <= GROW_AT_OR_BELOW_KIB && memory->actual_kib < memory->maximum_kib;
 }
 
 /* Repeated selection is clear and cheap for the small VM set. */
@@ -472,11 +472,7 @@ static void plan_reclamations(const VmMap *map, MemoryPlan *plan) {
 
         unsigned long long amount = MIN(MEMORY_STEP_KIB, memory->unused_kib - GUEST_MIN_UNUSED_KIB);
 
-        amount = MIN(amount, memory->actual_kib);
         amount -= amount % MEMORY_PAGE_KIB;
-        if (amount == 0) {
-            return;
-        }
 
         plan->targets[plan->count++] = (MemoryTarget){
             .record_index = record_index,
@@ -552,8 +548,7 @@ static void apply_memory_targets(VmMap *map, const MemoryPlan *plan) {
         const MemoryTarget *target = &plan->targets[target_index];
         VmRecord *record = &map->records[target->record_index];
 
-        if (target->target_kib == record->memory.actual_kib ||
-            record->memory.pending_target_kib != 0) {
+        if (target->target_kib == record->memory.actual_kib) {
             continue;
         }
 

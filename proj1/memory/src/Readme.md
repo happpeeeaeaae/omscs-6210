@@ -16,7 +16,7 @@ are KiB, and host free memory is converted from bytes to KiB.
    more than **300 MiB unused** can donate up to **100 MiB** per pass;
    `plan_reclamations` also limits the amount so the measured unused memory
    remains at least **100 MiB**. Donors are considered from most unused down.
-3. `plan_grants` considers VMs with less than **200 MiB unused**, from least
+3. `plan_grants` considers VMs with at most **150 MiB unused**, from least
    unused up. Each may receive at most **100 MiB**, stopping at its configured
    maximum or **2048 MiB**. The shared budget is host free memory minus the
    **200 MiB host reserve** and outstanding grants. Each planned grant spends
@@ -30,11 +30,12 @@ are KiB, and host free memory is converted from bytes to KiB.
 
 At 512 MiB allocated with 350 MiB unused, a VM can donate 100 MiB and
 receive a 412 MiB target. At 512 MiB allocated with 150 MiB unused, a VM can
-receive up to 100 MiB and reach 612 MiB when the host budget permits.
+receive up to 100 MiB and reach 612 MiB when the host budget permits. Idle
+512 MiB guests reporting roughly 190 MiB unused stay at 512 MiB.
 
 ## Safety, retries, and limits
 
-- The 200/300 MiB thresholds provide hysteresis; the 100 MiB step makes
+- The 150/300 MiB thresholds provide hysteresis; the 100 MiB step makes
   changes gradual. A donor above 300 MiB should retain more than 200 MiB
   unused after one full step **at sampling time**. The explicit 100 MiB bound
   is a second check. Guest demand can rise after sampling, so no policy
