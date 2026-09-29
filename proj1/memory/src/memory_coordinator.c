@@ -94,8 +94,6 @@ typedef struct {
     VmMemoryState memory;
 } VmRecord;
 
-/* Up to four guests are tested. This array-backed map uses an ID lookup and
- * verifies the UUID so a reused libvirt ID cannot inherit another VM's state. */
 typedef struct {
     VmRecord *records;
     size_t count;
@@ -116,7 +114,6 @@ typedef struct {
 typedef struct {
     VmMap history;
     unsigned long long pass_number;
-    bool debug;
     bool initialized;
 } MemorySchedulerState;
 
@@ -133,30 +130,11 @@ static MemorySchedulerState scheduler_state;
 
 void MemoryScheduler(virConnectPtr connection, int interval);
 
-static unsigned long long smaller_value(unsigned long long first, unsigned long long second) {
-    return first < second ? first : second;
-}
-
 static void initialize_memory_scheduler(MemorySchedulerState *state)
 {
-    const char *debug_setting = getenv("MEMORY_DEBUG");
     *state = (MemorySchedulerState) {
-        .debug = debug_setting != NULL && strcmp(debug_setting, "1") == 0,
         .initialized = true
     };
-}
-
-static void memory_debug(const char *format, ...) {
-    if (!scheduler_state.debug) {
-        return;
-    }
-
-    va_list arguments;
-    va_start(arguments, format);
-    fprintf(stderr, "[memory] ");
-    vfprintf(stderr, format, arguments);
-    fputc('\n', stderr);
-    va_end(arguments);
 }
 
 static void log_libvirt_failure(const char *call_name, const char *vm_uuid,
@@ -289,7 +267,7 @@ static void update_vm_memory(VmMemoryState *memory, const MemoryReading *reading
     }
 
     memory->sample_valid = true;
-    unsigned long long effective_maximum = smaller_value(maximum_kib, GUEST_MAX_KIB);
+    unsigned long long effective_maximum = MIN(maximum_kib, GUEST_MAX_KIB);
     unsigned long long previous_actual = memory->actual_kib;
     bool actual_changed = reading->actual_kib != memory->actual_kib;
     bool unused_changed = reading->unused_kib != memory->unused_kib;
@@ -341,17 +319,6 @@ static void read_memory_statistics(VmRecord *record, unsigned long long pass_num
 
     MemoryReading reading = parse_memory_statistics(statistics, statistic_count);
     update_vm_memory(&record->memory, &reading, domain_info.maxMem, pass_number);
-
-    if (!record->memory.fresh) {
-        memory_debug("%s: skipped sample actual=%llu unused=%llu max=%lu update=%llu "
-                     "has_actual=%d has_unused=%d has_update=%d pending=%llu",
-                     record->uuid, reading.actual_kib, reading.unused_kib,
-                     domain_info.maxMem, reading.update, reading.has_actual,
-                     reading.has_unused, reading.has_update,
-                     record->memory.pending_target_kib);
-    } else if (!reading.has_update) {
-        memory_debug("%s: using balloon statistics without LAST_UPDATE", record->uuid);
-    }
 }
 
 static bool allocate_vm_map(VmMap *snapshot, virDomainPtr **domains, virConnectPtr connection) {
@@ -363,7 +330,6 @@ static bool allocate_vm_map(VmMap *snapshot, virDomainPtr **domains, virConnectP
 
     snapshot->count = (size_t)domain_count;
     if (snapshot->count == 0) {
-        memory_debug("no active VMs");
         return true;
     }
 
@@ -504,9 +470,9 @@ static void plan_reclamations(const VmMap *map, MemoryPlan *plan) {
 
         const VmMemoryState *memory = &map->records[record_index].memory;
 
-        unsigned long long amount = smaller_value(MEMORY_STEP_KIB, memory->unused_kib - GUEST_MIN_UNUSED_KIB);
+        unsigned long long amount = MIN(MEMORY_STEP_KIB, memory->unused_kib - GUEST_MIN_UNUSED_KIB);
 
-        amount = smaller_value(amount, memory->actual_kib);
+        amount = MIN(amount, memory->actual_kib);
         amount -= amount % MEMORY_PAGE_KIB;
         if (amount == 0) {
             return;
@@ -528,7 +494,7 @@ static unsigned long long available_grant_kib(const VmMap *map, unsigned long lo
         if (memory->pending_target_kib > memory->actual_kib) {
             unsigned long long outstanding = memory->pending_target_kib -
                                              memory->actual_kib;
-            budget -= smaller_value(budget, outstanding);
+            budget -= MIN(budget, outstanding);
         }
     }
 
@@ -543,8 +509,8 @@ static void plan_grants(const VmMap *map, unsigned long long budget, MemoryPlan 
         }
 
         const VmMemoryState *memory = &map->records[record_index].memory;
-        unsigned long long amount = smaller_value(MEMORY_STEP_KIB, memory->maximum_kib - memory->actual_kib);
-        amount = smaller_value(amount, budget);
+        unsigned long long amount = MIN(MEMORY_STEP_KIB, memory->maximum_kib - memory->actual_kib);
+        amount = MIN(amount, budget);
         amount -= amount % MEMORY_PAGE_KIB;
 
         if (amount == 0) {
@@ -595,9 +561,6 @@ static void apply_memory_targets(VmMap *map, const MemoryPlan *plan) {
             record->memory.pending_target_kib = target->target_kib;
             record->memory.last_progress_pass = map->pass_number;
             record->memory.has_failed_request = false;
-            memory_debug("%s: %s actual=%llu target=%lu", record->uuid,
-                         target->grow ? "grant" : "reclaim",
-                         record->memory.actual_kib, target->target_kib);
         } else {
             record->memory.has_failed_request = true;
             record->memory.last_failed_pass = map->pass_number;
@@ -610,6 +573,7 @@ static void retry_stalled_requests(VmMap *map) {
     for (size_t record_index = 0; record_index < map->count; ++record_index) {
         VmRecord *record = &map->records[record_index];
         VmMemoryState *memory = &record->memory;
+        
         if (!memory->sample_valid || memory->pending_target_kib == 0 ||
             map->pass_number < memory->last_progress_pass ||
             map->pass_number - memory->last_progress_pass < REQUEST_RETRY_PASSES) {
@@ -617,8 +581,10 @@ static void retry_stalled_requests(VmMap *map) {
         }
 
         unsigned long long target = memory->pending_target_kib;
-        if (virDomainSetMemory(record->domain_handle, (unsigned long)target) < 0)
+        if (virDomainSetMemory(record->domain_handle, (unsigned long)target) < 0) {
             log_libvirt_failure("virDomainSetMemory", record->uuid, target);
+        }
+        
         memory->last_progress_pass = map->pass_number;
     }
 }
@@ -637,33 +603,6 @@ static void save_vm_history(MemorySchedulerState *state, VmMap *snapshot) {
     *snapshot = (VmMap){0};
 }
 
-static void debug_memory_snapshot(const VmMap *snapshot, unsigned long long host_free_kib) {
-    if (!scheduler_state.debug) {
-        return;
-    }
-
-    unsigned long long grant_budget_kib = available_grant_kib(snapshot, host_free_kib);
-    memory_debug("pass=%llu host_free=%llu KiB grant_budget=%llu KiB",
-                 snapshot->pass_number, host_free_kib, grant_budget_kib);
-
-    for (size_t record_index = 0; record_index < snapshot->count; ++record_index) {
-        const VmRecord *record = &snapshot->records[record_index];
-        const VmMemoryState *memory = &record->memory;
-        memory_debug("%s: actual=%llu unused=%llu max=%llu fresh=%d pending=%llu",
-                     record->uuid, memory->actual_kib, memory->unused_kib,
-                     memory->maximum_kib, memory->fresh, memory->pending_target_kib);
-
-        if (memory->fresh && memory->unused_kib < GROW_BELOW_KIB &&
-            memory->actual_kib >= memory->maximum_kib) {
-            memory_debug("%s: allocation ceiling prevents growth", record->uuid);
-        }
-    }
-
-    if (grant_budget_kib < MEMORY_PAGE_KIB) {
-        memory_debug("host reserve or pending grants prevent new grants");
-    }
-}
-
 void MemoryScheduler(virConnectPtr connection, int interval) {
     if (connection == NULL || interval <= 0) {
         return;
@@ -678,7 +617,6 @@ void MemoryScheduler(virConnectPtr connection, int interval) {
     unsigned long long host_free_kib = 0;
 
     if (fetch_vm_states(connection, interval, &scheduler_state.history, &snapshot, &host_free_kib)) {
-        debug_memory_snapshot(&snapshot, host_free_kib);
 
         if (plan_target_memory(&snapshot, host_free_kib, &plan)) {
             retry_stalled_requests(&snapshot);
