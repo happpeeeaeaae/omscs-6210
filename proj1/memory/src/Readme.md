@@ -1,7 +1,6 @@
 # Memory coordinator
 
-Build with `make`, then run `./memory_coordinator 2` to check the VMs every
-two seconds. `fetch_vm_states` reads each VM's allocation, unused memory, and
+`fetch_vm_states` reads each VM's allocation, unused memory, and
 maximum size, along with the host's free memory. As a VM uses more memory,
 its unused amount falls; when it frees memory, the unused amount rises. These
 readings show when a VM needs more room or has memory it can give back.
