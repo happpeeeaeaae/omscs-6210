@@ -18,8 +18,17 @@ enum {
     RECLAIM_ABOVE_KIB = 300 * 1024,
     HOST_RESERVE_KIB = 200 * 1024,
     GUEST_MAX_KIB = 2048 * 1024,
-    REQUEST_RETRY_PASSES = 3
+    FAILED_REQUEST_RETRY_PASSES = 3,
+    STALLED_REQUEST_RETRY_PASSES = 3
 };
+
+typedef enum {
+    SAMPLE_VALID,
+    SAMPLE_MISSING_UNUSED,
+    SAMPLE_INVALID_ACTUAL,
+    SAMPLE_INVALID_UNUSED,
+    SAMPLE_INVALID_MAXIMUM
+} SampleStatus;
 
 typedef struct {
     unsigned long long actual_kib;
@@ -29,9 +38,13 @@ typedef struct {
     unsigned long long pending_target_kib;
     unsigned long long last_failed_pass;
     unsigned long long last_progress_pass;
+    unsigned long long reported_maximum_kib;
+    SampleStatus sample_status;
     bool statistics_enabled;
     bool timestamp_available;
     bool has_failed_request;
+    bool maximum_reported;
+    bool has_sample;
     bool sample_valid;
     bool fresh;
 } VmMemoryState;
@@ -94,6 +107,8 @@ static void initialize_memory_scheduler(MemorySchedulerState *state)
         .debug = debug_setting != NULL && strcmp(debug_setting, "1") == 0,
         .initialized = true
     };
+    fprintf(stderr, "[memory] started: guest reserve=100 MiB, host reserve=200 MiB, "
+            "step=100 MiB, ceiling=2048 MiB\n");
 }
 
 static void memory_debug(const char *format, ...) {
@@ -238,34 +253,49 @@ static MemoryReading parse_memory_statistics(const virDomainMemoryStatStruct *st
     return reading;
 }
 
-static void update_vm_memory(VmMemoryState *memory, const MemoryReading *reading,
+static const char *sample_status_name(SampleStatus status) {
+    switch (status) {
+        case SAMPLE_MISSING_UNUSED: return "missing UNUSED";
+        case SAMPLE_INVALID_ACTUAL: return "missing or zero actual balloon";
+        case SAMPLE_INVALID_UNUSED: return "UNUSED exceeds actual balloon";
+        case SAMPLE_INVALID_MAXIMUM: return "zero configured maximum";
+        default: return "valid";
+    }
+}
+
+static void update_vm_memory(VmRecord *record, const MemoryReading *reading,
                              unsigned long maximum_kib, unsigned long long pass_number) {
-    bool not_ready = !reading->has_actual || !reading->has_unused ||
-        reading->actual_kib == 0 ||
-        reading->unused_kib > reading->actual_kib ||
-        maximum_kib == 0 ||
-        (reading->has_update && (reading->update == 0 ||
-         (memory->timestamp_available && reading->update < memory->last_update)));
+    VmMemoryState *memory = &record->memory;
+    SampleStatus status = SAMPLE_VALID;
+    if (!reading->has_actual || reading->actual_kib == 0) status = SAMPLE_INVALID_ACTUAL;
+    else if (!reading->has_unused) status = SAMPLE_MISSING_UNUSED;
+    else if (reading->unused_kib > reading->actual_kib) status = SAMPLE_INVALID_UNUSED;
+    else if (maximum_kib == 0) status = SAMPLE_INVALID_MAXIMUM;
 
-    if (not_ready) {
-        return;
+    memory->sample_valid = status == SAMPLE_VALID;
+    if (status != memory->sample_status) {
+        fprintf(stderr, "[memory] %s: %s\n", record->uuid,
+                status == SAMPLE_VALID ? "statistics accepted again" : sample_status_name(status));
+        memory->sample_status = status;
     }
+    if (!memory->sample_valid) return;
 
-    memory->sample_valid = true;
+    bool timestamp_available = reading->has_update && reading->update != 0;
     unsigned long long effective_maximum = smaller_value(maximum_kib, GUEST_MAX_KIB);
+    bool changed = !memory->has_sample || reading->actual_kib != memory->actual_kib ||
+                   reading->unused_kib != memory->unused_kib ||
+                   effective_maximum != memory->maximum_kib ||
+                   (timestamp_available &&
+                    (!memory->timestamp_available || reading->update != memory->last_update));
     unsigned long long previous_actual = memory->actual_kib;
-    bool actual_changed = reading->actual_kib != memory->actual_kib;
-    bool unused_changed = reading->unused_kib != memory->unused_kib;
-    bool maximum_changed = effective_maximum != memory->maximum_kib;
-    memory->last_update = reading->has_update ? reading->update : 0;
-    memory->timestamp_available = reading->has_update;
-    if (!actual_changed && !unused_changed && !maximum_changed) {
-        return;
-    }
+    memory->has_sample = true;
+    memory->timestamp_available = timestamp_available;
+    memory->last_update = timestamp_available ? reading->update : 0;
+    if (!changed) return;
 
-    if (actual_changed) memory->actual_kib = reading->actual_kib;
-    if (unused_changed) memory->unused_kib = reading->unused_kib;
-    if (maximum_changed) memory->maximum_kib = effective_maximum;
+    memory->actual_kib = reading->actual_kib;
+    memory->unused_kib = reading->unused_kib;
+    memory->maximum_kib = effective_maximum;
 
     if (memory->pending_target_kib != 0) {
         unsigned long long target = memory->pending_target_kib;
@@ -290,6 +320,15 @@ static void read_memory_statistics(VmRecord *record, unsigned long long pass_num
         return;
     }
 
+    if (!record->memory.maximum_reported ||
+        record->memory.reported_maximum_kib != domain_info.maxMem) {
+        fprintf(stderr, "[memory] %s: configured maximum=%lu KiB, effective maximum=%llu KiB\n",
+                record->uuid, domain_info.maxMem,
+                smaller_value(domain_info.maxMem, GUEST_MAX_KIB));
+        record->memory.reported_maximum_kib = domain_info.maxMem;
+        record->memory.maximum_reported = true;
+    }
+
     int statistic_count = virDomainMemoryStats(record->domain_handle, statistics, VIR_DOMAIN_MEMORY_STAT_NR, 0);
 
     if (statistic_count < 0) {
@@ -303,7 +342,11 @@ static void read_memory_statistics(VmRecord *record, unsigned long long pass_num
     }
 
     MemoryReading reading = parse_memory_statistics(statistics, statistic_count);
-    update_vm_memory(&record->memory, &reading, domain_info.maxMem, pass_number);
+    if (!reading.has_actual) {
+        reading.actual_kib = domain_info.memory;
+        reading.has_actual = true;
+    }
+    update_vm_memory(record, &reading, domain_info.maxMem, pass_number);
 
     if (!record->memory.fresh) {
         memory_debug("%s: skipped sample actual=%llu unused=%llu max=%lu update=%llu "
@@ -312,7 +355,7 @@ static void read_memory_statistics(VmRecord *record, unsigned long long pass_num
                      domain_info.maxMem, reading.update, reading.has_actual,
                      reading.has_unused, reading.has_update,
                      record->memory.pending_target_kib);
-    } else if (!reading.has_update) {
+    } else if (!reading.has_update || reading.update == 0) {
         memory_debug("%s: using balloon statistics without LAST_UPDATE", record->uuid);
     }
 }
@@ -416,18 +459,19 @@ static bool target_exists(const MemoryPlan *plan, size_t record_index) {
 
 static bool vm_can_change(const VmRecord *record, bool donor, unsigned long long pass_number) {
     const VmMemoryState *memory = &record->memory;
-    if (!memory->sample_valid || memory->pending_target_kib != 0) {
+    if (memory->pending_target_kib != 0) {
         return false;
     }
 
-    bool retry_due = memory->has_failed_request &&
+    bool retry_due = memory->has_failed_request && memory->sample_valid &&
                      pass_number >= memory->last_failed_pass &&
-                     pass_number - memory->last_failed_pass >= REQUEST_RETRY_PASSES;
-    if (memory->has_failed_request && !memory->fresh && !retry_due) {
+                     pass_number - memory->last_failed_pass >= FAILED_REQUEST_RETRY_PASSES;
+    if (!memory->fresh && !retry_due) {
         return false;
     }
 
-    /* Without a timestamp, a failed request must not be retried every pass. */
+    /* A failed call may be retried on a new timestamp, or every three passes
+     * when timestamp progress cannot be observed. */
     if (memory->has_failed_request && !memory->timestamp_available && !retry_due) {
         return false;
     }
@@ -575,11 +619,13 @@ static void retry_stalled_requests(VmMap *map) {
         VmMemoryState *memory = &record->memory;
         if (!memory->sample_valid || memory->pending_target_kib == 0 ||
             map->pass_number < memory->last_progress_pass ||
-            map->pass_number - memory->last_progress_pass < REQUEST_RETRY_PASSES) {
+            map->pass_number - memory->last_progress_pass < STALLED_REQUEST_RETRY_PASSES) {
             continue;
         }
 
         unsigned long long target = memory->pending_target_kib;
+        fprintf(stderr, "[memory] %s: balloon stalled at %llu KiB; retrying target=%llu KiB\n",
+                record->uuid, memory->actual_kib, target);
         if (virDomainSetMemory(record->domain_handle, (unsigned long)target) < 0)
             log_libvirt_failure("virDomainSetMemory", record->uuid, target);
         memory->last_progress_pass = map->pass_number;

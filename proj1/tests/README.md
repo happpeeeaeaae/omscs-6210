@@ -54,11 +54,13 @@ Reported demand can exceed 100% even though measured utilization is capped.
 - Missing/stale statistics, delayed balloon responses, and failed memory requests.
 - Missing `LAST_UPDATE` with valid balloon readings, failed statistics-period
   setup, and rate-limited retries after failed requests without timestamps.
-- No redundant requests for fresh unchanged statistics in the stable band,
+- No redundant requests for unchanged statistics in the stable band,
   guests at either allocation ceiling, or host budgets smaller than one page.
 - Pending growth and reclamation across repeated and partially completed
-  observations, failed-request retries on fresh samples, and reuse of a previous
-  target after completed grow–shrink–grow changes.
+  observations, three-pass retries for stalled targets and failed requests,
+  and reuse of a previous target after completed grow–shrink–grow changes.
+- Unchanged measurements with newer timestamps, zero timestamps, and invalid
+  samples do not become fresh or overwrite accepted measurements.
 - Fixed grant targets: budget reserved for a failed grant is reconsidered on
   the next fresh sample, rather than reassigned later in the same cycle.
 - Reservations for pending grants, restarts, and a failed UUID query followed by

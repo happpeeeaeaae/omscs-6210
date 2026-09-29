@@ -34,7 +34,8 @@ requires libvirt development headers and libraries.
 4. `apply_memory_targets` calls `virDomainSetMemory` only when the proposed
    target differs from the observed allocation and no earlier request for
    that guest is pending. After an accepted request, the target stays pending
-   until a newer valid sample reports that allocation. `save_vm_history`
+   until a valid sample reports that allocation. A stalled target is reissued
+   after three passes without allocation progress. `save_vm_history`
    retains the measurements and pending requests for the next pass; cleanup
    functions free temporary plans, maps, and domain handles.
 
@@ -55,11 +56,12 @@ later host-free-memory reading reports it.
   demand can change after sampling, so these are safeguards based on the
   available statistics, not a guarantee about future free memory.
 - Missing or invalid `ACTUAL_BALLOON` or `UNUSED` data makes that guest
-  ineligible for an action. If `LAST_UPDATE` is supplied, it must advance
-  before another decision. If it is absent, valid balloon readings can still
-  be used. A failed request on that timestamp-free path is retried at most
-  once every three passes. A pending request prevents repeated changes while
-  a guest's balloon is still responding.
+  ineligible for an action. A zero or regressed `LAST_UPDATE` is ignored, and
+  a newer timestamp alone does not make unchanged measurements fresh. If the
+  timestamp is absent, changed valid readings can still be used. Failed
+  requests on unchanged readings are retried after three passes; changed
+  readings can prompt an earlier retry when a timestamp is available. A
+  pending request prevents a different target while the balloon responds.
 - If host free memory is at or below 200 MiB, no new grants are planned.
   Reclamation can still proceed. The planner subtracts outstanding grants
   before sharing the remaining host budget, so several hungry guests cannot

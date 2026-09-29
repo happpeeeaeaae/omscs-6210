@@ -21,6 +21,7 @@ void test_memory_plan_actions(void) {
         records[d].domain_id = guests[d].id;
         records[d].memory.actual_kib = 512 * KIB;
         records[d].memory.maximum_kib = 2048 * KIB;
+        records[d].memory.sample_valid = true;
         records[d].memory.fresh = true;
     }
     records[0].memory.unused_kib = 100 * KIB;
@@ -47,8 +48,9 @@ void test_pending_memory(int grow) {
     unsigned long long pool = total_memory();
     run(); assert(sets == 1); assert(guests[0].target == target);
     for (int round = 0; round < 3; round++) {
-        run(); assert(sets == 1); // Unchanged timestamp and allocation.
-        tick(2); run(); assert(sets == 1); // Fresh stats, balloon still unchanged.
+        run(); assert(sets == 1 + (round >= 1)); // Reissue only after three passes without progress.
+        tick(2); run(); assert(sets == 1 + round);
+        assert(guests[0].target == target);
     }
 
     // Partial completion leaves unused memory outside the stable band.
@@ -58,15 +60,15 @@ void test_pending_memory(int grow) {
         guests[0].actual -= 40 * KIB; guests[0].unused -= 40 * KIB; host_free += 40 * KIB;
     }
     for (int round = 0; round < 3; round++) {
-        run(); assert(sets == 1);
-        tick(2); run(); assert(sets == 1);
+        run(); assert(sets == 3 + (round >= 2));
+        tick(2); run(); assert(sets == 3 + (round >= 1));
         assert(guests[0].target == target);
         assert(total_memory() == pool);
     }
-    settle_memory(); tick(2); run(); assert(sets == 1);
+    settle_memory(); tick(2); run(); assert(sets == 4);
     assert(guests[0].actual == target); assert(guests[0].target == 0);
     assert(total_memory() == pool);
-    printf("Memory: pending %s is not repeated during partial completion\n", grow ? "growth" : "reclamation");
+    printf("Memory: pending %s reissues after three stalled passes\n", grow ? "growth" : "reclamation");
 }
 
 void test_failed_memory_retry(int grow) {
@@ -75,14 +77,14 @@ void test_failed_memory_retry(int grow) {
     guests[0].fail_set = 1;
     run(); assert(sets == 1); assert(guests[0].target == 0);
     run(); assert(sets == 1); // A failed call does not make stale stats usable.
-    tick(2); run(); assert(sets == 2); assert(guests[0].target == 0);
+    tick(2); run(); assert(sets == 1); assert(guests[0].target == 0);
+    assert(!scheduler_state.history.records[0].memory.fresh);
     guests[0].fail_set = 0;
     run(); assert(sets == 2);
-    tick(2); run(); assert(sets == 3);
     assert(guests[0].target == (grow ? 612 : 412) * KIB);
-    tick(2); run(); assert(sets == 3);
-    settle_memory(); tick(2); run(); assert(sets == 3);
-    printf("Memory: failed %s retries only on fresh samples\n", grow ? "growth" : "reclamation");
+    tick(2); run(); assert(sets == 2);
+    settle_memory(); tick(2); run(); assert(sets == 2);
+    printf("Memory: failed %s retries after three unchanged passes\n", grow ? "growth" : "reclamation");
 }
 
 void test_missing_timestamp_fallback(void) {
@@ -94,13 +96,14 @@ void test_missing_timestamp_fallback(void) {
     assert(sets == 1 && guests[0].target == 612 * KIB);
     for (int round = 0; round < 4; ++round) {
         run();
-        assert(sets == 1);
+        assert(sets == 1 + (round >= 2));
+        assert(guests[0].target == 612 * KIB);
     }
 
     settle_memory();
     guests[0].unused = 150 * KIB;
     run();
-    assert(sets == 2 && guests[0].target == 712 * KIB);
+    assert(sets == 3 && guests[0].target == 712 * KIB);
 
     reset(1);
     guests[0].omit_last_update = 1;
@@ -109,6 +112,42 @@ void test_missing_timestamp_fallback(void) {
     run();
     assert(sets == 0);
     puts("Memory: missing timestamp permits valid samples, but missing unused memory does not");
+}
+
+void test_unchanged_and_zero_timestamp(void) {
+    reset(1);
+    run();
+    assert(scheduler_state.history.records[0].memory.fresh);
+    unsigned long long actual = scheduler_state.history.records[0].memory.actual_kib;
+    unsigned long long unused = scheduler_state.history.records[0].memory.unused_kib;
+
+    tick(2); run();
+    assert(!scheduler_state.history.records[0].memory.fresh);
+    assert(scheduler_state.history.records[0].memory.last_update == guests[0].updated);
+
+    guests[0].actual += 40 * KIB;
+    guests[0].missing = 1;
+    tick(2); run();
+    assert(!scheduler_state.history.records[0].memory.sample_valid);
+    assert(scheduler_state.history.records[0].memory.actual_kib == actual);
+
+    guests[0].missing = 0;
+    guests[0].unused = 100 * KIB;
+    guests[0].updated = 0;
+    run();
+    assert(!scheduler_state.history.records[0].memory.sample_valid);
+    assert(!scheduler_state.history.records[0].memory.fresh);
+    assert(scheduler_state.history.records[0].memory.actual_kib == actual);
+    assert(scheduler_state.history.records[0].memory.unused_kib == unused);
+    assert(sets == 0);
+
+    guests[0].updated = 4;
+    run();
+    assert(scheduler_state.history.records[0].memory.fresh);
+    assert(scheduler_state.history.records[0].memory.actual_kib == guests[0].actual);
+    assert(scheduler_state.history.records[0].memory.unused_kib == guests[0].unused);
+    assert(sets == 1);
+    puts("Memory: unchanged, invalid, and zero-timestamp readings preserve state");
 }
 
 void test_failed_timestamp_free_retry(void) {
@@ -164,6 +203,7 @@ void test_fixed_grant_targets(void) {
     run(); assert(sets == 2);
     assert(guests[0].target == 0 && guests[1].target == 562 * KIB);
     guests[0].fail_set = 0;
+    guests[0].unused += KIB; // A changed measurement can retry before the three-pass fallback.
     tick(2); run(); assert(sets == 3);
     assert(guests[0].target == 612 * KIB && guests[1].target == 562 * KIB);
     settle_memory(); assert(host_free == 200 * KIB);
@@ -176,7 +216,7 @@ void test_memory_update_suppression(void) {
     for (int round = 0; round < 6; round++) {
         tick(2); run(); assert(sets == 0);
     }
-    puts("Memory: fresh unchanged statistics in the stable band need no requests");
+    puts("Memory: unchanged statistics in the stable band need no requests");
 
     reset(2);
     guests[0].actual = guests[0].maximum = 600 * KIB;
@@ -274,6 +314,7 @@ int main(void) {
     setbuf(stdout, NULL);
     test_memory_plan_actions();
     test_missing_timestamp_fallback();
+    test_unchanged_and_zero_timestamp();
     test_failed_timestamp_free_retry();
     test_statistics_setup_failure();
     test_noop_target_is_not_sent();

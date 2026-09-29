@@ -135,7 +135,7 @@ int virDomainSetMemory(virDomainPtr dom, unsigned long target) {
     sets++; dom->set_calls++;
     assert(target != dom->actual); // Every request must change the observed allocation.
     if (dom->fail_set) return -1;
-    assert(dom->target == 0); // Never overwrite a balloon request still in flight.
+    assert(dom->target == 0 || dom->target == target); // A stalled request may repeat the same target.
     assert(target <= dom->maximum); assert(target <= 2048 * KIB);
     long long delta = (long long)target - dom->actual;
     assert(llabs(delta) <= 100 * KIB);
