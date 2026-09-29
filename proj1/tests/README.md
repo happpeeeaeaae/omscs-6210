@@ -49,6 +49,7 @@ Reported demand can exceed 100% even though measured utilization is capped.
 ## Memory checks
 
 - Growth and gradual reclamation, including exact threshold boundaries.
+- Idle 512 MiB guests with roughly 190 MiB unused stay at 512 MiB.
 - Guest and host reserves, a shared allocation budget, and partial grants.
 - Configured guest limits and the 2048 MiB project ceiling.
 - Missing/stale statistics, delayed balloon responses, and failed memory requests.

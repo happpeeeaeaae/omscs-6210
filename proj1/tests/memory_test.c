@@ -195,6 +195,21 @@ void test_noop_target_is_not_sent(void) {
     puts("Memory: unchanged target is never sent to libvirt");
 }
 
+void test_idle_guests_stay_at_512(void) {
+    reset(4);
+    for (int d = 0; d < 4; d++) guests[d].unused = (190 + d * 2) * KIB;
+    run(); assert(sets == 0);
+    tick(2); run(); assert(sets == 0);
+    for (int d = 0; d < 4; d++) assert(guests[d].actual == 512 * KIB);
+
+    guests[0].unused = 151 * KIB;
+    tick(2); run(); assert(sets == 0);
+    guests[0].unused = 150 * KIB;
+    tick(2); run(); assert(sets == 1 && guests[0].target == 612 * KIB);
+    for (int d = 1; d < 4; d++) assert(guests[d].target == 0);
+    puts("Memory: idle 512 MiB guests stay put until unused memory reaches 150 MiB");
+}
+
 void test_fixed_grant_targets(void) {
     reset(2);
     guests[0].unused = guests[1].unused = 100 * KIB;
@@ -318,6 +333,7 @@ int main(void) {
     test_failed_timestamp_free_retry();
     test_statistics_setup_failure();
     test_noop_target_is_not_sent();
+    test_idle_guests_stay_at_512();
     test_memory_update_suppression();
     reset(4); guests[0].unused = 150 * KIB;
     for (int d = 1; d < 4; d++) guests[d].unused = 400 * KIB;

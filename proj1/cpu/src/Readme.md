@@ -12,7 +12,8 @@ build needs libvirt development headers and libraries.
    `virDomainGetVcpus`. A single online pCPU in the affinity mask is a valid
    pin; a broad or invalid mask is marked for repair.
 2. `plan_cpu_pins` matches VMs by ID **and UUID** and vCPUs by number against
-   the prior snapshot. `collect_cpu_work` computes utilization as
+   the prior snapshot. `find_vm` scans the small VM set directly.
+   `collect_cpu_work` computes utilization as
    `100 × (CPU-time delta in ns) / (monotonic elapsed time in ns)`. It sums the
    percentages assigned to each online pCPU to estimate its load.
 3. `load_deviation` computes the population standard deviation of pCPU loads.

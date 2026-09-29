@@ -92,8 +92,8 @@ typedef struct {
 } CpuCycle;
 
 typedef struct {
-	unsigned int domain_id;
 	char uuid[VIR_UUID_STRING_BUFLEN];
+	int domain_index;
 	unsigned int vcpu_number;
 	int target_cpu;
 } CpuAssignment;
@@ -128,10 +128,8 @@ typedef struct {
 static SchedulerState scheduler_state;
 
 static void release_snapshot(CpuSnapshot *snapshot) {
-	if (snapshot->vms != NULL) {
-		for (size_t vm_index = 0; vm_index < snapshot->vm_count; vm_index++) {
-			free(snapshot->vms[vm_index].vcpus);
-		}
+	for (size_t vm_index = 0; vm_index < snapshot->vm_count; vm_index++) {
+		free(snapshot->vms[vm_index].vcpus);
 	}
 
 	free(snapshot->vms);
@@ -261,26 +259,6 @@ static int read_vm_state(virDomainPtr domain, int domain_index, const CpuSnapsho
 	return read_count == (int)vm->vcpu_count ? 0 : -1;
 }
 
-static int compare_vm_ids(const void *left, const void *right) {
-	const CpuVmState *left_vm = left;
-	const CpuVmState *right_vm = right;
-	return (left_vm->domain_id > right_vm->domain_id) - (left_vm->domain_id < right_vm->domain_id);
-}
-
-static int sort_and_validate_vm_ids(CpuSnapshot *snapshot) {
-	if (snapshot->vm_count > 1) {
-		qsort(snapshot->vms, snapshot->vm_count, sizeof(*snapshot->vms), compare_vm_ids);
-	}
-	
-	for (size_t vm_index = 1; vm_index < snapshot->vm_count; vm_index++) {
-		if (snapshot->vms[vm_index - 1].domain_id == snapshot->vms[vm_index].domain_id) {
-			return -1;
-		}
-	}
-
-	return 0;
-}
-
 static int read_cpu_snapshot(virConnectPtr connection, CpuCycle *cycle) {
 	CpuSnapshot *snapshot = &cycle->snapshot;
 	if (read_online_cpus(connection, snapshot) < 0) {
@@ -310,25 +288,17 @@ static int read_cpu_snapshot(virConnectPtr connection, CpuCycle *cycle) {
 		}
 	}
 	
-	if (sort_and_validate_vm_ids(snapshot) < 0) {
-		return -1;
-	}
-	
 	return clock_gettime(CLOCK_MONOTONIC, &snapshot->sampled_at) == 0 ? 0 : -1;
 }
 
 static const CpuVmState *find_vm(const CpuSnapshot *snapshot, unsigned int domain_id) {
-	size_t first = 0;
-	size_t last = snapshot->vm_count;
-	while (first < last) {
-		size_t middle = first + (last - first) / 2;
-		if (snapshot->vms[middle].domain_id < domain_id)
-			first = middle + 1;
-		else
-			last = middle;
+	for (size_t vm_index = 0; vm_index < snapshot->vm_count; vm_index++) {
+		if (snapshot->vms[vm_index].domain_id == domain_id) {
+			return &snapshot->vms[vm_index];
+		}
 	}
-	return first < snapshot->vm_count &&
-	       snapshot->vms[first].domain_id == domain_id ? &snapshot->vms[first] : NULL;
+
+	return NULL;
 }
 
 static const CpuVcpuState *find_vcpu(const CpuVmState *vm, unsigned int vcpu_number) {
@@ -468,8 +438,8 @@ static void assign_greedily(const CpuSnapshot *snapshot, CpuWork *work, size_t w
 
 static CpuAssignment make_assignment(const CpuWork *work, int target_cpu) {
 	CpuAssignment assignment = {0};
-	assignment.domain_id = work->vm->domain_id;
 	strcpy(assignment.uuid, work->vm->uuid);
+	assignment.domain_index = work->vm->domain_index;
 	assignment.vcpu_number = work->vcpu->number;
 	assignment.target_cpu = target_cpu;
 	return assignment;
@@ -568,14 +538,9 @@ static int apply_pin_changes(const CpuCycle *cycle, const CpuPlan *plan) {
 	
 	for (size_t change_index = 0; change_index < plan->change_count; change_index++) {
 		const CpuAssignment *change = &plan->changes[change_index];
-		const CpuVmState *vm = find_vm(&cycle->snapshot, change->domain_id);
-		if (vm == NULL || strcmp(vm->uuid, change->uuid) != 0) {
-			continue;
-		}
-		
 		memset(pin_map, 0, (size_t)map_length);
 		VIR_USE_CPU(pin_map, change->target_cpu);
-		if (virDomainPinVcpu(cycle->domains[vm->domain_index], change->vcpu_number,
+		if (virDomainPinVcpu(cycle->domains[change->domain_index], change->vcpu_number,
 				     pin_map, map_length) < 0) {
 			fprintf(stderr, "Could not pin vCPU %u of %s\n", change->vcpu_number, change->uuid);
 		}
