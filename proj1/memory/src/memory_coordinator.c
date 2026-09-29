@@ -130,7 +130,6 @@ typedef struct {
 } MemoryReading;
 
 static MemorySchedulerState scheduler_state;
-static volatile sig_atomic_t is_exit;
 
 void MemoryScheduler(virConnectPtr connection, int interval);
 
@@ -177,14 +176,6 @@ static void log_libvirt_failure(const char *call_name, const char *vm_uuid,
     }
 }
 
-static virConnectPtr open_hypervisor_connection(void) {
-    virConnectPtr connection = virConnectOpen("qemu:///system");
-    if (connection == NULL) {
-        log_libvirt_failure("virConnectOpen", NULL, 0);
-    }
-    return connection;
-}
-
 static void cleanup_vm_map(VmMap *map) {
     for (size_t record_index = 0; record_index < map->count; ++record_index) {
         if (map->records[record_index].domain_handle != NULL) {
@@ -204,11 +195,6 @@ static void cleanup_memory_plan(MemoryPlan *plan)
 {
     free(plan->targets);
     *plan = (MemoryPlan){0};
-}
-
-static void cleanup_memory_scheduler(MemorySchedulerState *state) {
-    cleanup_vm_map(&state->history);
-    state->initialized = false;
 }
 
 static const VmRecord *find_vm_by_id(const VmMap *map, unsigned int domain_id) {
@@ -703,18 +689,4 @@ void MemoryScheduler(virConnectPtr connection, int interval) {
 
     cleanup_memory_plan(&plan);
     cleanup_vm_map(&snapshot);
-}
-
-static void signal_callback_handler(int signal_number) {
-    (void)signal_number;
-    is_exit = 1;
-}
-
-static bool parse_interval(const char *argument, int *interval) {
-    char *end = NULL;
-    long parsed = strtol(argument, &end, 10);
-    if (argument == end || *end != '\0' || parsed <= 0 || parsed > INT_MAX)
-        return false;
-    *interval = (int)parsed;
-    return true;
 }
